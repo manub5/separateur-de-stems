@@ -1,0 +1,23 @@
+[project]
+name = "separateur-de-stems"
+version = "0.1.0"
+description = "Desktop audio stem separator using audio-separator"
+requires-python = ">=3.12"
+dependencies = [
+    "audio-separator",
+    "soundfile",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["separateur_de_stems*"]

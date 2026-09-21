@@ -1,0 +1,9 @@
+# Questions ouvertes
+
+- Q-001 : `htdemucs_6s` n'a pas de score SDR pour guitar/piano. Faut-il
+  chercher un modèle spécialisé hors catalogue UVR pour ces pistes ?
+- Q-002 : la stratégie de distribution des modèles (CI/GitHub) est différée ;
+  tout reste local au PC pour l'instant.
+- Q-003 : le mode 100 % hors ligne exige d'embarquer les poids,
+  `download_checks.json` et les configurations MDXC. À traiter lors de la phase
+  d'empaquetage.
