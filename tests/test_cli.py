@@ -557,6 +557,39 @@ def test_list_models_reports_project_error_as_two(tmp_path, monkeypatch, capsys)
     assert "no catalog" in capsys.readouterr().err
 
 
+def test_list_models_reports_unexpected_error_as_two_without_traceback(
+    tmp_path, monkeypatch, capsys
+):
+    def failing_fetch_catalog(model_dir):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(cli, "fetch_catalog", failing_fetch_catalog)
+
+    code = cli.main(["--list-models", "--model-dir", str(tmp_path)])
+
+    captured = capsys.readouterr()
+    assert code == 2
+    assert captured.err.strip() != ""
+    assert "Traceback" not in captured.err
+
+
+def test_main_missing_output_file_returns_two(tmp_path, monkeypatch, capsys):
+    source = tmp_path / "song.wav"
+    source.write_bytes(b"audio")
+    missing = tmp_path / "engine_out" / "song_(Vocals)_model.wav"
+    factory = make_engine_factory({str(source): {"vocals": str(missing)}})
+    monkeypatch.setattr(cli, "SeparationEngine", factory)
+
+    code = cli.main(
+        [str(source), "--stems", "vocals", "--output-dir", str(tmp_path / "out")]
+    )
+
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "vocals" in captured.err
+    assert "Traceback" not in captured.err
+
+
 def test_main_help_returns_zero():
     with pytest.raises(SystemExit) as exc_info:
         cli.main(["--help"])

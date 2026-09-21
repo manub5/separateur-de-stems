@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from typing import Callable, Optional
 
+from separateur_de_stems.core.catalog import fetch_catalog, verify_selected_models
 from separateur_de_stems.core.errors import (
     CancelledError,
     ModelUnavailableError,
@@ -34,11 +35,13 @@ class SeparationEngine:
         output_dir: str,
         log_level: int = logging.INFO,
         separator_factory=None,
+        catalog_fetcher=fetch_catalog,
     ):
         self._model_dir = model_dir
         self._output_dir = output_dir
         self._log_level = log_level
         self._separator_factory = separator_factory or _lazy_separator_factory
+        self._catalog_fetcher = catalog_fetcher
 
     def run(
         self,
@@ -60,6 +63,9 @@ class SeparationEngine:
             raise UnsupportedFormatError(
                 f"Unsupported input format: {source.suffix}"
             )
+
+        catalog = self._catalog_fetcher(self._model_dir)
+        verify_selected_models(catalog, stems)
 
         models = select_models(stems)
         self._prepare_output_dir()

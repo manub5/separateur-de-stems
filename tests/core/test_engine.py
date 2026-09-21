@@ -45,11 +45,16 @@ class RecordingFactory:
         return separator
 
 
-def make_engine(tmp_path, behavior, separator_factory):
+def full_catalog():
+    return {filename: {} for filename in set(STEM_TO_MODEL.values())}
+
+
+def make_engine(tmp_path, behavior, separator_factory, catalog_fetcher=None):
     return SeparationEngine(
         model_dir=str(tmp_path / "models"),
         output_dir=str(tmp_path / "out"),
         separator_factory=separator_factory,
+        catalog_fetcher=catalog_fetcher or (lambda model_dir: full_catalog()),
     )
 
 
@@ -97,6 +102,45 @@ def test_engine_rejects_unsupported_extension(tmp_path):
         engine.run(make_input(tmp_path, "song.txt"), {"vocals"})
 
 
+def test_engine_rejects_missing_model_before_inference(tmp_path):
+    factory = RecordingFactory(lambda index: ([], None))
+    engine = SeparationEngine(
+        model_dir=str(tmp_path / "models"),
+        output_dir=str(tmp_path / "out"),
+        separator_factory=factory,
+        catalog_fetcher=lambda model_dir: {},
+    )
+
+    with pytest.raises(ModelUnavailableError):
+        engine.run(make_input(tmp_path), {"vocals"})
+
+    assert factory.instances == []
+
+
+def test_engine_accepts_catalog_with_all_required_models(tmp_path):
+    output_dir = tmp_path / "out"
+    factory = RecordingFactory(
+        lambda index: ([f"{output_dir}/song_(Vocals)_x.wav"], None)
+    )
+    received = []
+
+    def catalog_fetcher(model_dir):
+        received.append(model_dir)
+        return full_catalog()
+
+    engine = SeparationEngine(
+        model_dir=str(tmp_path / "models"),
+        output_dir=str(output_dir),
+        separator_factory=factory,
+        catalog_fetcher=catalog_fetcher,
+    )
+
+    result = engine.run(make_input(tmp_path), {"vocals"})
+
+    assert result == {"vocals": f"{output_dir}/song_(Vocals)_x.wav"}
+    assert received == [str(tmp_path / "models")]
+
+
 def test_engine_accepts_uppercase_extension(tmp_path):
     factory = RecordingFactory(
         lambda index: ([f"{tmp_path}/out/song_(Vocals)_x.wav"], None)
@@ -129,6 +173,7 @@ def test_engine_creates_output_dir(tmp_path):
         model_dir=str(tmp_path / "models"),
         output_dir=str(output_dir),
         separator_factory=factory,
+        catalog_fetcher=lambda model_dir: full_catalog(),
     )
 
     engine.run(make_input(tmp_path), {"vocals"})
@@ -144,6 +189,7 @@ def test_engine_raises_output_error_when_output_dir_is_file(tmp_path):
         model_dir=str(tmp_path / "models"),
         output_dir=str(output_dir),
         separator_factory=factory,
+        catalog_fetcher=lambda model_dir: full_catalog(),
     )
 
     with pytest.raises(OutputError):
@@ -161,6 +207,7 @@ def test_engine_raises_output_error_when_output_dir_not_writable(tmp_path):
             model_dir=str(tmp_path / "models"),
             output_dir=str(output_dir),
             separator_factory=factory,
+            catalog_fetcher=lambda model_dir: full_catalog(),
         )
 
         with pytest.raises(OutputError):
@@ -179,6 +226,7 @@ def test_engine_passes_exact_separator_kwargs(tmp_path):
         output_dir=str(output_dir),
         log_level=logging.DEBUG,
         separator_factory=factory,
+        catalog_fetcher=lambda model_dir: full_catalog(),
     )
 
     engine.run(make_input(tmp_path), {"vocals"})

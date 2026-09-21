@@ -7,3 +7,6 @@
 - Q-003 : le mode 100 % hors ligne exige d'embarquer les poids,
   `download_checks.json` et les configurations MDXC. À traiter lors de la phase
   d'empaquetage.
+- Q-004 : les licences des modèles retenus restent « À vérifier » dans
+  MODELS.md. Vérifier leur compatibilité avec une diffusion publique de
+  l'application avant toute distribution.

@@ -144,7 +144,9 @@ def _export(
     for stem in sorted(stems & outputs.keys()):
         source = outputs[stem]
         if not Path(source).is_file():
-            continue
+            raise OutputError(
+                f"Fichier de sortie introuvable pour la piste {stem} : {source}"
+            )
         intermediates.append(source)
         wav_base = _natural_target(input_path, stem, "wav", output_dir)
         if _same_file(source, wav_base):
@@ -207,6 +209,10 @@ def _list_models(model_dir: str) -> int:
     try:
         catalog = fetch_catalog(model_dir)
     except StemSeparatorError as error:
+        print(f"Erreur : {error}", file=sys.stderr)
+        return 2
+    except Exception as error:  # noqa: BLE001
+        _LOGGER.error("Unexpected failure while listing models: %s", error)
         print(f"Erreur : {error}", file=sys.stderr)
         return 2
 
