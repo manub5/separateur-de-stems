@@ -11,3 +11,8 @@
 
 Les tailles et les licences restent à vérifier dans les sources officielles de
 chaque modèle avant leur distribution.
+
+Vérification du 2026-09-22 : la présence, le type et les valeurs SDR indiquées
+ci-dessus ont été vérifiés dans le catalogue réel d'`audio-separator` 0.47.0.
+Les tailles et les licences restent ouvertes et ne sont pas considérées comme
+vérifiées.
