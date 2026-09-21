@@ -269,6 +269,156 @@ def test_main_never_deletes_preexisting_file(tmp_path, monkeypatch):
     assert preexisting.read_bytes() == b"keep me"
 
 
+def test_main_refuses_intermediate_equal_to_wav_target(tmp_path, monkeypatch, capsys):
+    source = tmp_path / "song.wav"
+    source.write_bytes(b"audio")
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    target = out_dir / "song_vocals.wav"
+    target.write_bytes(b"engine output")
+    factory = make_engine_factory({str(source): {"vocals": str(target)}})
+    exporter = RecordingExport()
+    monkeypatch.setattr(cli, "SeparationEngine", factory)
+    monkeypatch.setattr(cli, "to_wav24", exporter.to_wav24)
+    monkeypatch.setattr(cli, "to_mp3_320", exporter.to_mp3_320)
+
+    code = cli.main(
+        [
+            str(source),
+            "--stems",
+            "vocals",
+            "--no-mp3",
+            "--output-dir",
+            str(out_dir),
+        ]
+    )
+
+    assert code == 2
+    assert exporter.wav_calls == []
+    assert target.read_bytes() == b"engine output"
+    assert capsys.readouterr().err.strip() != ""
+
+
+def test_main_refuses_intermediate_symlink_to_wav_target(tmp_path, monkeypatch, capsys):
+    source = tmp_path / "song.wav"
+    source.write_bytes(b"audio")
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    target = out_dir / "song_vocals.wav"
+    target.write_bytes(b"engine output")
+    link = tmp_path / "engine_out" / "song_(Vocals)_model.wav"
+    link.parent.mkdir()
+    link.symlink_to(target)
+    factory = make_engine_factory({str(source): {"vocals": str(link)}})
+    exporter = RecordingExport()
+    monkeypatch.setattr(cli, "SeparationEngine", factory)
+    monkeypatch.setattr(cli, "to_wav24", exporter.to_wav24)
+    monkeypatch.setattr(cli, "to_mp3_320", exporter.to_mp3_320)
+
+    code = cli.main(
+        [
+            str(source),
+            "--stems",
+            "vocals",
+            "--no-mp3",
+            "--output-dir",
+            str(out_dir),
+        ]
+    )
+
+    assert code == 2
+    assert exporter.wav_calls == []
+    assert target.read_bytes() == b"engine output"
+    assert capsys.readouterr().err.strip() != ""
+
+
+def test_main_does_not_delete_symlink_target(tmp_path, monkeypatch):
+    source = tmp_path / "song.wav"
+    source.write_bytes(b"audio")
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    preexisting = out_dir / "keep.wav"
+    preexisting.write_bytes(b"keep me")
+    link = tmp_path / "engine_out" / "song_(Vocals)_model.wav"
+    link.parent.mkdir()
+    link.symlink_to(preexisting)
+    factory = make_engine_factory({str(source): {"vocals": str(link)}})
+    exporter = RecordingExport()
+    monkeypatch.setattr(cli, "SeparationEngine", factory)
+    monkeypatch.setattr(cli, "to_wav24", exporter.to_wav24)
+    monkeypatch.setattr(cli, "to_mp3_320", exporter.to_mp3_320)
+
+    code = cli.main(
+        [
+            str(source),
+            "--stems",
+            "vocals",
+            "--no-mp3",
+            "--output-dir",
+            str(out_dir),
+        ]
+    )
+
+    assert code == 0
+    assert preexisting.exists()
+    assert preexisting.read_bytes() == b"keep me"
+    assert not link.exists()
+
+
+def test_main_never_deletes_file_outside_run(tmp_path, monkeypatch):
+    source = tmp_path / "song.wav"
+    source.write_bytes(b"audio")
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    unrelated = out_dir / "unrelated.wav"
+    unrelated.write_bytes(b"unrelated")
+    intermediate = tmp_path / "engine_out" / "song_(Vocals)_model.wav"
+    intermediate.parent.mkdir()
+    intermediate.write_bytes(b"intermediate")
+    factory = make_engine_factory({str(source): {"vocals": str(intermediate)}})
+    exporter = RecordingExport()
+    monkeypatch.setattr(cli, "SeparationEngine", factory)
+    monkeypatch.setattr(cli, "to_wav24", exporter.to_wav24)
+    monkeypatch.setattr(cli, "to_mp3_320", exporter.to_mp3_320)
+
+    cli.main(
+        [
+            str(source),
+            "--stems",
+            "vocals",
+            "--no-mp3",
+            "--output-dir",
+            str(out_dir),
+        ]
+    )
+
+    assert unrelated.exists()
+    assert unrelated.read_bytes() == b"unrelated"
+    assert not intermediate.exists()
+
+
+@pytest.mark.parametrize("raw_stems", ["", ",", " , ", ",,"])
+def test_main_rejects_empty_stems_selection(tmp_path, monkeypatch, capsys, raw_stems):
+    source = tmp_path / "song.wav"
+    source.write_bytes(b"audio")
+    factory = make_engine_factory({str(source): {}})
+    monkeypatch.setattr(cli, "SeparationEngine", factory)
+
+    code = cli.main(
+        [
+            str(source),
+            "--stems",
+            raw_stems,
+            "--output-dir",
+            str(tmp_path / "out"),
+        ]
+    )
+
+    assert code == 2
+    assert factory.instances == []
+    assert capsys.readouterr().err.strip() != ""
+
+
 def test_main_reports_progress(tmp_path, monkeypatch, capsys):
     source = tmp_path / "song.wav"
     source.write_bytes(b"audio")

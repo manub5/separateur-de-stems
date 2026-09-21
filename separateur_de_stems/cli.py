@@ -15,7 +15,7 @@ from separateur_de_stems.core.errors import (
 )
 from separateur_de_stems.core.export import to_mp3_320, to_wav24
 from separateur_de_stems.core.models import STEM_TO_MODEL
-from separateur_de_stems.core.naming import stem_filename
+from separateur_de_stems.core.naming import sanitize, stem_filename
 
 CANONICAL_STEMS = tuple(STEM_TO_MODEL.keys())
 DEFAULT_STEMS = "vocals,instrumental"
@@ -82,6 +82,12 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 2
 
     stems = parse_stems(args.stems)
+    if not stems:
+        print(
+            "Erreur : aucune piste sélectionnée (--stems est vide).",
+            file=sys.stderr,
+        )
+        return 2
     unknown = sorted(stems - STEM_TO_MODEL.keys())
     if unknown:
         print(
@@ -133,33 +139,66 @@ def _export(
     output_dir: str,
     no_mp3: bool,
 ) -> None:
-    exported_wavs: list[str] = []
+    exported_targets: list[str] = []
     intermediates: list[str] = []
     for stem in sorted(stems & outputs.keys()):
         source = outputs[stem]
         if not Path(source).is_file():
             continue
         intermediates.append(source)
+        wav_base = _natural_target(input_path, stem, "wav", output_dir)
+        if _same_file(source, wav_base):
+            raise OutputError(
+                "Le fichier intermédiaire du moteur et la cible d'export "
+                f"coïncident : {wav_base}"
+            )
         wav_path = stem_filename(input_path, stem, "wav", output_dir)
+        if _same_file(source, wav_path):
+            raise OutputError(
+                "Le fichier intermédiaire du moteur et la cible d'export "
+                f"coïncident : {wav_path}"
+            )
         to_wav24(source, wav_path)
-        exported_wavs.append(wav_path)
+        exported_targets.append(wav_path)
         if not no_mp3:
             mp3_path = stem_filename(input_path, stem, "mp3", output_dir)
+            if _same_file(wav_path, mp3_path):
+                raise OutputError(
+                    "La cible WAV et la cible MP3 coïncident : " f"{mp3_path}"
+                )
             to_mp3_320(wav_path, mp3_path)
+            exported_targets.append(mp3_path)
 
-    _remove_intermediates(intermediates, exported_wavs)
+    _remove_intermediates(intermediates, exported_targets)
+
+
+def _natural_target(input_path: str, stem: str, ext: str, output_dir: str) -> str:
+    source_name = sanitize(Path(input_path).stem)
+    stem_name = sanitize(stem)
+    return str(Path(output_dir) / f"{source_name}_{stem_name}.{ext.lstrip('.')}")
+
+
+def _same_file(first: str, second: str) -> bool:
+    try:
+        return Path(first).resolve() == Path(second).resolve()
+    except OSError:
+        return False
 
 
 def _remove_intermediates(
-    intermediates: list[str], exported_wavs: list[str]
+    intermediates: list[str], export_targets: list[str]
 ) -> None:
-    exported = {str(Path(path).resolve()) for path in exported_wavs}
+    protected = {str(Path(path).resolve()) for path in export_targets}
     for path in intermediates:
         try:
-            target = Path(path).resolve()
-            if target in exported:
+            link = Path(path)
+            resolved = str(link.resolve())
+            if resolved in protected:
                 continue
-            target.unlink()
+            if link.is_symlink():
+                link.unlink()
+            else:
+                Path(path).unlink()
         except OSError:
             pass
 
