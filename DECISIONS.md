@@ -30,3 +30,21 @@ sous-processus exploité en phase UI.
 
 Raison : le catalogue ne propose que `htdemucs_6s.yaml` pour ces pistes, sans
 score SDR. Cette limite est signalée dans `QUESTIONS.md`.
+
+## D-006 — Export sans fichier temporaire ni rename
+
+Raison : `to_wav24` et `to_mp3_320` écrivent directement la destination. Avec
+`ffmpeg -y`, une destination préexistante peut être tronquée avant un échec, et
+elle n'est alors pas restaurée (le nettoyage ne supprime que les fichiers créés
+par l'appel courant). Accepté en phase 1 car la CLI écrit toujours des chemins
+uniques et neufs via `unique_path`. À revoir (temp + rename atomique) si un jour
+l'écrasement de fichiers existants devient un cas d'usage.
+
+## D-007 — Résolution des chemins de sortie par l'engine
+
+Raison : `audio_separator` 0.47.0 renvoie, pour les modèles MDXC, des noms de
+fichiers relatifs (sans le dossier de sortie) malgré une docstring annonçant
+des chemins complets, alors que d'autres backends renvoient des chemins
+absolus. `SeparationEngine._collect` résout désormais toute sortie relative
+contre `output_dir` via `_resolve_output`, afin que le dict retourné contienne
+toujours des chemins exploitables (nécessaire pour l'E2E et la future UI).
