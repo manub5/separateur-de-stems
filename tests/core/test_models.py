@@ -122,3 +122,12 @@ def test_model_spec_copies_sdr_for_each_instance() -> None:
     first.sdr["vocals"] = 3.0
 
     assert second.sdr == {"vocals": 1.0}
+
+
+def test_select_models_returns_fresh_sdr_for_each_call() -> None:
+    first = select_models({"vocals"})
+    first[0].sdr["vocals"] = -1.0
+
+    second = select_models({"vocals"})
+
+    assert second[0].sdr == {"vocals": 12.6, "instrumental": None}

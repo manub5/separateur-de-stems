@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from separateur_de_stems.core.errors import ModelUnavailableError
 
@@ -73,4 +73,4 @@ def select_models(stems: set[str]) -> list[ModelSpec]:
     filenames = dict.fromkeys(
         STEM_TO_MODEL[stem] for stem in _CANONICAL_STEMS if stem in stems
     )
-    return [_MODEL_SPECS[filename] for filename in filenames]
+    return [replace(_MODEL_SPECS[filename]) for filename in filenames]

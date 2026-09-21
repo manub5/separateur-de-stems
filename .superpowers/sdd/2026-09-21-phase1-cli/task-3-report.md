@@ -31,3 +31,22 @@
 - `ModelSpec` is shallowly frozen by design: its `sdr` dictionary remains mutable, but construction copies it to prevent cross-instance mutation. Callers can still mutate an individual specification.
 - `select_models` is side-effect free and idempotent for the same input set.
 - Covered empty input, one and multiple unknown stems, mixed known/unknown input, nondeterministic set ordering, and guitar/piano deduplication.
+
+## Review round 1/5
+
+### TDD evidence
+
+- RED command: `../../.venv/bin/python -m pytest tests/core/test_models.py::test_select_models_returns_fresh_sdr_for_each_call`.
+- RED output: `1 failed in 0.03s`; the second call returned the first call's mutated vocals SDR (`-1.0` instead of `12.6`).
+- GREEN targeted command: `../../.venv/bin/python -m pytest tests/core/test_models.py`.
+- GREEN targeted output: `17 passed in 0.02s`.
+- REGRESSION command: `../../.venv/bin/python -m pytest`.
+- REGRESSION output: `27 passed in 0.04s`.
+
+### Fix and self-review
+
+- `select_models` now clones each catalogue dataclass with `dataclasses.replace`; `ModelSpec.__post_init__` copies each clone's SDR dictionary.
+- Confirmed mappings, canonical ordering, and shared-model deduplication are unchanged.
+- Confirmed mutation of one call's SDR cannot alter either the catalogue or a later call's result.
+- The operation remains side-effect free and idempotent for equivalent unmodified inputs.
+- No filesystem, network, subprocess, secret-handling, or other security-sensitive behavior was added.
