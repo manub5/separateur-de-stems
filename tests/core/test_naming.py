@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from pytest import MonkeyPatch
+
 from separateur_de_stems.core.naming import sanitize, stem_filename, unique_path
 
 
@@ -17,6 +19,14 @@ def test_unique_path_leaves_available_path_unchanged(tmp_path: Path) -> None:
     assert unique_path(str(path)) == str(path)
 
 
+def test_unique_path_preserves_available_relative_path(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    assert unique_path("./song.wav") == "./song.wav"
+
+
 def test_unique_path_adds_first_available_suffix(tmp_path: Path) -> None:
     path = tmp_path / "song.wav"
     path.touch()
@@ -30,6 +40,13 @@ def test_unique_path_skips_existing_suffixes(tmp_path: Path) -> None:
     (tmp_path / "song_1.wav").touch()
 
     assert unique_path(str(path)) == str(tmp_path / "song_2.wav")
+
+
+def test_unique_path_treats_dangling_symlink_as_occupied(tmp_path: Path) -> None:
+    path = tmp_path / "song.wav"
+    path.symlink_to(tmp_path / "missing.wav")
+
+    assert unique_path(str(path)) == str(tmp_path / "song_1.wav")
 
 
 def test_stem_filename_builds_complete_sanitized_path(tmp_path: Path) -> None:

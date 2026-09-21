@@ -44,3 +44,36 @@ the exact requested interfaces. Added focused tests in `tests/core/test_naming.p
 - Targeted: `8 passed in 0.02s`.
 - Complete suite: `8 passed in 0.02s`.
 - `git diff --check`: clean.
+
+## Review Correction 1/5
+
+### Changes
+
+- Preserved the exact input string when `unique_path` receives an available
+  path, including a leading `./`.
+- Replaced target-following existence checks with `os.path.lexists`, so dangling
+  symbolic links are treated as occupied for both the original path and numbered
+  candidates.
+
+### TDD and Verification
+
+- Command: `../../.venv/bin/python -m pytest tests/core/test_naming.py -v`.
+- RED output: `2 failed, 8 passed in 0.04s`; failures showed `./song.wav` being
+  normalized and a dangling symlink being returned as available.
+- GREEN targeted output: `10 passed in 0.02s`.
+- Full-suite command: `../../.venv/bin/python -m pytest -v`.
+- Full-suite output: `10 passed in 0.02s`.
+- Commit: `fix(core): preserve paths and detect dangling symlinks`.
+
+### Self-review
+
+- The correction is limited to path availability detection and free-path return
+  representation; existing suffix selection and filename construction remain
+  unchanged.
+- Security: dangling links can no longer be mistaken for free output names.
+- Side effects and idempotence: the helper still only reads filesystem metadata
+  and preserves repeatability while filesystem state is unchanged. The existing
+  check-then-create concurrency race remains the output writer's responsibility.
+- Unexpected inputs covered by this correction: explicitly relative free paths
+  and dangling symbolic links. Symlink creation requires platform support and is
+  exercised on the Linux development target.

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 
@@ -11,15 +12,15 @@ def sanitize(name: str) -> str:
 
 def unique_path(path: str) -> str:
     candidate = Path(path)
-    if not candidate.exists():
-        return str(candidate)
+    if not os.path.lexists(candidate):
+        return path
 
     index = 1
     while True:
         suffixed_candidate = candidate.with_name(
             f"{candidate.stem}_{index}{candidate.suffix}"
         )
-        if not suffixed_candidate.exists():
+        if not os.path.lexists(suffixed_candidate):
             return str(suffixed_candidate)
         index += 1
 
