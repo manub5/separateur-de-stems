@@ -37,24 +37,46 @@ Live 12, en s'appuyant uniquement sur des bibliothèques et modèles éprouvés.
 
 ## 4. Pile technique
 
-- Langage : Python 3.12.
-- Moteur : `audio-separator` (karaokenerds/python-audio-separator), version 0.47.0.
+- Langage : Python 3.12 (3.12.3).
+- Moteur : `audio-separator` (repo canonique `nomadkaraoke/python-audio-separator`),
+  version 0.47.0, installé et vérifié localement dans `.venv/`.
   - API confirmée : `from audio_separator.separator import Separator`
-  - `Separator(model_file_dir=..., output_dir=..., output_format=...)`
-  - `load_model(model_filename=...)` / `separate(path)` → liste de chemins
-  - Liste des modèles : `Separator(info_only=True).list_models()` ou CLI
-    `--list_models --list_format=json`
-  - Erreurs : `BatchSeparationError`, `InvalidAudioDataError`, `AudioExportError`
+  - `Separator.__init__` accepte notamment `model_file_dir`, `output_dir`,
+    `output_format` (défaut `"WAV"`), `output_bitrate`, `sample_rate`,
+    `chunk_duration`, `info_only` (défaut `False`).
+  - `load_model(model_filename=...)` (str ou list) / `separate(path)` →
+    `list[str]` des fichiers réellement écrits. `separate` accepte
+    `custom_output_names={stem: nom}` (clés comparées en minuscules).
+  - **Il n'existe PAS de `list_models()`**. Le catalogue s'obtient via
+    `Separator(info_only=True).get_simplified_model_list(filter_sort_by=stem)`
+    → dict `{filename: {"Name", "Type", "Stems", "SDR"}}`, filtré et trié par
+    SDR décroissant pour le stem demandé. `list_supported_model_files()` donne
+    la structure brute groupée par architecture (`list_format=json` = ce dict).
+  - Erreurs (ré-exportées depuis `audio_separator.separator`) :
+    `BatchSeparationError` (`.successful_files`, `.failures`),
+    `InvalidAudioDataError`, `AudioExportError` (`.path`, `.backend`).
   - Accélération auto : CUDA (`[gpu]`), MPS/CoreML Apple Silicon (`[cpu]`),
     sinon CPU. Sur macOS arm64 audio-separator exige `torch>=2.13` ; sur Linux
-    `torch>=2.3`. À surveiller (voir QUESTIONS).
-  - Sortie par défaut FLAC ; sortie WAV/MP3 configurable.
-  - Progression : **pas de callback intra-modèle** dans l'API publique →
-    progression par étape/modèle uniquement.
-- Accélération locale : CUDA (RTX 3060) détectée par `--env_info`.
+    `torch>=2.3`. Vérifié en local : Python 3.12 + torch 2.14.0+cu130 + CUDA
+    (RTX 3060) + onnxruntime-gpu → `--env_info` confirme torch ET onnx CUDA.
+  - **Pas d'annulation ni de callback de progression intra-modèle** : l'API
+    n'expose aucun `stop_event`/hook. Toute la progression interne passe par
+    `tqdm` (console). Conséquence : progression **par étape/modèle** uniquement,
+    et l'annulation nécessite de **tuer un sous-processus**.
+  - **Hors ligne strict** : `load_model` exige que le filename figure dans le
+    catalogue, et `list_supported_model_files()` télécharge
+    `download_checks.json` s'il est absent de `model_file_dir`. Un mode 100 %
+    hors ligne devra donc embarquer les poids **et** `download_checks.json`
+    (et les configs MDXC `*.yaml` / data JSON).
+- Installation locale Linux (contournement documenté) : les headers Python
+  (`Python.h`) sont absents du système et interdits d'installation (`sudo`/`apt`).
+  `diffq` (dep. Linux d'audio-separator) ne compile donc pas. Solution :
+  installer `diffq-fixed` (wheel cp312 manylinux, l'alternative déjà utilisée par
+  audio-separator sous Windows) puis `pip install audio-separator --no-deps` et
+  compléter les dépendances manuellement. Détails dans `DECISIONS.md`.
+- Accélération locale : CUDA (RTX 3060) confirmée par `--env_info`.
 - Interface : PySide6 (Qt).
 - Encodage MP3 : ffmpeg (présent localement ; embarqué pour le `.app` final).
-- Empaquetage : PyInstaller (à valider à l'étape 8).
 
 ## 5. Architecture
 
@@ -77,14 +99,28 @@ donc testable sans interface.
 
 ### 5.1 `core/models.py`
 
-- Récupère la liste réelle des modèles (JSON) et l'expose en structures typées.
-- Table de mapping `STEM → modèle` vérifiée au runtime contre la liste réelle ;
-  si un modèle attendu est absent → `ModelUnavailableError` (pas de crash).
+- Récupère le catalogue réel via `get_simplified_model_list(filter_sort_by=...)`
+  et l'expose en structures typées.
+- Table de mapping `STEM → filename` figée à partir du catalogue réel vérifié :
+
+  | Piste | Modèle retenu | SDR | Arch |
+  |---|---|---|---|
+  | Voix (`vocals`) | `vocals_mel_band_roformer.ckpt` | 12.6 | MDXC |
+  | Instrumental | `model_bs_roformer_ep_317_sdr_12.9755.ckpt` | 16.5 | MDXC |
+  | Batterie (`drums`) | `htdemucs_ft.yaml` | 10.0 | Demucs |
+  | Basse (`bass`) | `hdemucs_mmi.yaml` | 12.2 | Demucs |
+  | Guitare (`guitar`) | `htdemucs_6s.yaml` | — (non fourni) | Demucs |
+  | Piano (`piano`) | `htdemucs_6s.yaml` | — (non fourni) | Demucs |
+
+  Le mapping est **vérifié au runtime** contre le catalogue réel ; si un modèle
+  attendu est absent → `ModelUnavailableError` (pas de crash).
 - `select_models(stems: set[str]) -> list[ModelSpec]` : déduit les modèles
   nécessaires des cases cochées. Un modèle multi-pistes peut couvrir plusieurs
-  pistes.
+  pistes (ex. `htdemucs_6s.yaml` pour guitare + piano ; RoFormer pour
+  voix/instrumental).
 - Catalogue documenté dans `MODELS.md` (nom, piste(s), SDR, taille, source,
-  licence).
+  licence). **Limite connue** : guitare et piano ne sont couverts que par
+  `htdemucs_6s` sans score SDR → à signaler dans `QUESTIONS.md`.
 
 ### 5.2 `core/engine.py`
 
@@ -92,15 +128,23 @@ donc testable sans interface.
 - `prepare(models)` : charge les modèles.
 - `run(input_path, stems, progress_cb, cancel_event)` :
   - `progress_cb(percent: int, stage: str)` appelé **par étape/modèle**.
-  - `cancel_event` (`threading.Event`) vérifié **entre** les étapes →
-    annulation coopérative.
-  - Limite assumée : un modèle en cours ne peut pas être interrompu à mi-calcul.
+  - **Annulation** : l'API n'offre aucun point d'interruption. L'annulation
+    repose sur l'exécution de la séparation dans un **sous-processus tuable**
+    (`multiprocessing.Process`), surveillé par le parent. `cancel_event` est
+    vérifié entre étapes côté parent ; une annulation en cours d'inférence tue
+    le sous-processus. (La CLI peut aussi appeler in-process pour un usage
+    simple, sans annulation.)
+  - Limite assumée : tuer le sous-processus ne permet pas de reprendre à
+    mi-modèle ; le fichier partiel est supprimé.
 - Single-thread côté inférence (le GPU est déjà saturé par torch).
 
 ### 5.3 `core/export.py`
 
-- WAV 24 bits : conversion via `soundfile` (subtype `PCM_24`).
-- MP3 320 kb/s : ffmpeg (`--output_bitrate=320k` natif, ou appel ffmpeg direct).
+- `Separator` écrit le format de sortie demandé (`output_format="WAV"`).
+- WAV 24 bits : contrôle du subtype `PCM_24` via `soundfile` (relecture +
+  réécriture si nécessaire).
+- MP3 320 kb/s : `output_format="MP3"`, `output_bitrate="320k"` (ffmpeg).
+- Les deux formats sont produits par piste.
 
 ### 5.4 `core/naming.py`
 
@@ -123,21 +167,25 @@ fichier → select_models(stems) → engine.run(...) → export WAV24+MP3 → co
 ### UI (étape ultérieure)
 
 ```
-[Main thread]                          [QThread worker]
+[Main thread]                       [QThread worker]           [sous-processus]
 Drop/open ──► "Séparer" ──► SeparationWorker.run()
                               ├─ core.select_models
-                              ├─ core.engine.run (cancel_event)
+                              ├─ core.engine.run ────────────► séparation
+                              │      (cancel_event)              (tuable)
                               └─ core.export
                               ▼
              signaux: progress(int,str) / finished(list) / error(str)
                               ▼
  ProgressBar ◄── progress       │  Annuler ──► cancel_event.set()
+                                            └─► terminate sous-processus
 ```
 
 - Le worker Qt ne contient **aucune** logique métier : il traduit les callbacks
   `core` en signaux.
 - Aucun widget n'est touché depuis le thread worker.
 - Pas de QThreadPool parallèle.
+- Le sous-processus tuable est la seule façon d'annuler une inférence en cours
+  (l'API audio-separator n'expose aucun point d'interruption).
 
 ## 7. Gestion des erreurs
 
@@ -170,13 +218,13 @@ Cas limites identifiés (couverts par les tests) :
 
 ## 9. Étapes du plan (chacune testable + un commit)
 
-1. `PLAN.md`, `DECISIONS.md`, `PROGRESS.md`, `.gitignore`, structure, monde
-   `.venv` + dépendances.
+1. `PLAN.md`, `DECISIONS.md`, `PROGRESS.md`, `.gitignore`, structure, venv +
+   dépendances (contournement `diffq-fixed` documenté).
 2. Squelette `core` + tests unitaires (`naming`, `export`).
 3. `models.py` : récupération réelle des modèles, classement SDR, `MODELS.md`.
 4. `engine.py` + CLI minimale + test E2E synthétique.
 5. Choix des pistes / modèles multiples, sorties WAV24 + MP3.
-6. UI PySide6 + worker QThread + annulation + drag&drop.
+6. UI PySide6 + worker QThread + sous-processus tuable (annulation) + drag&drop.
 7. Traductions FR/EN + persistance des préférences.
 8. Empaquetage Linux (test PyInstaller) + préparation workflow macOS (différé,
    local d'abord).
