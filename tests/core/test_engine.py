@@ -248,6 +248,18 @@ def test_engine_parsing_uses_last_matching_stem_over_source_parentheses(tmp_path
     assert engine._stem_from_output(filename) == "vocals"
 
 
+def test_engine_resolves_relative_output_to_output_dir(tmp_path):
+    output_dir = tmp_path / "out"
+    factory = RecordingFactory(
+        lambda index: (["song_(Vocals)_x.wav"], None)
+    )
+    engine = make_engine(tmp_path, None, factory)
+
+    result = engine.run(make_input(tmp_path), {"vocals"})
+
+    assert result == {"vocals": os.path.join(str(output_dir), "song_(Vocals)_x.wav")}
+
+
 def test_engine_filters_complementary_stems(tmp_path):
     output_dir = tmp_path / "out"
     factory = RecordingFactory(

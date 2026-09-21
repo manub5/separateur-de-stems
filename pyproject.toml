@@ -17,6 +17,7 @@ separateur-de-stems = "separateur_de_stems.cli:main"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+addopts = "-m 'not slow'"
 
 [build-system]
 requires = ["setuptools>=68"]

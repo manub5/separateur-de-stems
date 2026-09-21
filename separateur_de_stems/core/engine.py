@@ -156,7 +156,12 @@ class SeparationEngine:
                 continue
             if STEM_TO_MODEL.get(stem) != model_filename:
                 continue
-            collected[stem] = output
+            collected[stem] = self._resolve_output(output)
+
+    def _resolve_output(self, output: str) -> str:
+        if os.path.isabs(output):
+            return output
+        return os.path.join(self._output_dir, output)
 
     def _stem_from_output(self, path: str) -> Optional[str]:
         basename = Path(path).stem
