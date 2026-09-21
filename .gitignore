@@ -13,4 +13,5 @@ models/
 .mypy_cache/
 .ruff_cache/
 .worktrees/
+.superpowers/
 *.qm
