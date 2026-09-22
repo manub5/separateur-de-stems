@@ -82,7 +82,13 @@ class SubprocessSeparator:
         stems,
         progress_cb: Optional[Callable[[int, str], None]] = None,
     ) -> None:
-        del progress_cb
+        # Progress is reported through ``progress_queue``/``poll_progress``;
+        # a callback cannot cross the process boundary, so reject it loudly
+        # instead of silently ignoring it.
+        if progress_cb is not None:
+            raise ValueError(
+                "progress_cb is not supported; use progress_queue instead"
+            )
         with self._lock:
             if self._process is not None:
                 raise RuntimeError("separation already running")

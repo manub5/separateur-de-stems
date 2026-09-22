@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 from separateur_de_stems.core.export import to_mp3_320, to_wav24
-from separateur_de_stems.core.models import SUPPORTED_EXTENSIONS
+from separateur_de_stems.core.models import is_supported_audio
 from separateur_de_stems.core.naming import sanitize, stem_filename
 from separateur_de_stems.ui.drop_zone import DropZone
 from separateur_de_stems.ui.paths import default_model_dir, default_output_dir
@@ -53,6 +53,7 @@ class MainWindow(QMainWindow):
         self._worker = None
         self._input_path: str | None = None
         self._running = False
+        self._exporting = False
         self._run_stems: set[str] | None = None
         self._pre_run_files: set[str] | None = None
 
@@ -175,7 +176,7 @@ class MainWindow(QMainWindow):
         }
 
     def start_separation(self) -> None:
-        if self._running:
+        if self._running or self._exporting:
             return
         input_path = self._input_path
         stems = self.selected_stems()
@@ -202,6 +203,10 @@ class MainWindow(QMainWindow):
         worker.start()
 
     def cancel_separation(self) -> None:
+        # During export the worker is already finished: requesting a cancel
+        # on it would be pointless, so it is ignored.
+        if self._exporting:
+            return
         if self._worker is not None:
             self._worker.request_cancel()
 
@@ -213,12 +218,18 @@ class MainWindow(QMainWindow):
             self.status_label.setText(message)
 
     def on_finished(self, outputs: dict) -> None:
+        # The worker has already emitted its terminal signal, so there is
+        # nothing left to cancel while the export runs. Block the button and
+        # drop the "Cancel" label before touching the disk.
+        self._set_exporting_state(True)
         try:
             exported = self._export_outputs(outputs)
         except Exception as error:  # noqa: BLE001
+            self._set_exporting_state(False)
             self.on_failed(str(error))
             return
 
+        self._set_exporting_state(False)
         self._set_running_state(False)
         self.progress_bar.setValue(100)
         self.status_label.setText(self.tr("Done"))
@@ -407,6 +418,16 @@ class MainWindow(QMainWindow):
 
         QDesktopServices.openUrl(QUrl.fromLocalFile(folder))
 
+    def _set_exporting_state(self, exporting: bool) -> None:
+        """Mark the post-separation export phase.
+
+        No worker is alive anymore, so the button must not read "Cancel"
+        nor offer cancellation while the files are written.
+        """
+        self._exporting = exporting
+        self.separate_button.setText(self.tr("Separate"))
+        self._update_controls()
+
     def _set_running_state(self, running: bool) -> None:
         self._running = running
         self.separate_button.setText(
@@ -422,6 +443,9 @@ class MainWindow(QMainWindow):
         self._update_controls()
 
     def _update_controls(self) -> None:
+        if self._exporting:
+            self.separate_button.setEnabled(False)
+            return
         if self._running:
             self.separate_button.setEnabled(True)
             return
@@ -434,8 +458,7 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _is_supported(path: str) -> bool:
-        lowered = path.lower()
-        return any(lowered.endswith(extension) for extension in SUPPORTED_EXTENSIONS)
+        return is_supported_audio(path)
 
     def _stem_label(self, stem: str) -> str:
         """Translated checkbox label for ``stem`` using literal strings."""

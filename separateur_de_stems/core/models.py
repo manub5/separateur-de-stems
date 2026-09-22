@@ -1,9 +1,21 @@
+import os
 from dataclasses import dataclass, replace
 
 from separateur_de_stems.core.errors import ModelUnavailableError
 
 
 SUPPORTED_EXTENSIONS = {".wav", ".flac", ".mp3", ".aiff", ".aif", ".m4a"}
+
+
+def is_supported_audio(path: str) -> bool:
+    """Return True when ``path``'s real extension is a supported audio one.
+
+    Uses ``os.path.splitext`` so a name like ``song.wav.exe`` or a hidden
+    file named exactly ``.wav`` is rejected, unlike a naive ``endswith``
+    check. Shared by the CLI and the UI to keep one source of truth.
+    """
+    extension = os.path.splitext(path)[1].lower()
+    return extension in SUPPORTED_EXTENSIONS
 
 STEM_TO_MODEL = {
     "vocals": "vocals_mel_band_roformer.ckpt",

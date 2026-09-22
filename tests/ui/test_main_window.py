@@ -108,6 +108,40 @@ def test_open_file_rejects_unsupported_extension(qtbot, settings, tmp_path):
     assert window.separate_button.isEnabled() is False
 
 
+def test_open_file_rejects_double_extension(qtbot, settings, tmp_path):
+    window = _make_window(qtbot, settings)
+    disguised = tmp_path / "song.wav.exe"
+    disguised.write_bytes(b"")
+    window.open_file(str(disguised))
+    assert window.current_file() is None
+    assert window.separate_button.isEnabled() is False
+
+
+def test_open_file_rejects_extension_only_basename(qtbot, settings, tmp_path):
+    """A hidden file named exactly ``.wav`` has no real extension."""
+    window = _make_window(qtbot, settings)
+    hidden = tmp_path / ".wav"
+    hidden.write_bytes(b"")
+    window.open_file(str(hidden))
+    assert window.current_file() is None
+
+
+def test_open_file_rejects_backup_extension(qtbot, settings, tmp_path):
+    window = _make_window(qtbot, settings)
+    backup = tmp_path / "song.wav.bak"
+    backup.write_bytes(b"")
+    window.open_file(str(backup))
+    assert window.current_file() is None
+
+
+def test_open_file_accepts_uppercase_extension(qtbot, settings, tmp_path):
+    window = _make_window(qtbot, settings)
+    audio = tmp_path / "SONG.WAV"
+    audio.write_bytes(b"")
+    window.open_file(str(audio))
+    assert window.current_file() == str(audio)
+
+
 def test_selected_stems_reflects_checkboxes(qtbot, settings):
     window = _make_window(qtbot, settings)
     window.stem_checkboxes["drums"].setChecked(True)
@@ -215,6 +249,51 @@ def test_on_finished_resets_running_state(
     assert window.separate_button.text() == window.tr("Separate")
     assert window.drop_zone.isEnabled() is True
     assert window.output_edit.isEnabled() is True
+
+
+def test_button_is_not_cancellable_during_export(
+    qtbot, settings, tmp_path, fake_factory, monkeypatch
+):
+    """During export there is no live worker, so cancel must be unavailable."""
+    observed = []
+
+    def probe_wav24(src, dest):
+        observed.append(
+            (
+                window.separate_button.isEnabled(),
+                window.separate_button.text(),
+            )
+        )
+        return dest
+
+    monkeypatch.setattr(main_window_module, "to_wav24", probe_wav24)
+    monkeypatch.setattr(main_window_module, "to_mp3_320", lambda src, dest: dest)
+
+    window = _make_window(qtbot, settings, worker_factory=fake_factory)
+    audio = tmp_path / "song.wav"
+    audio.write_bytes(b"")
+    window.open_file(str(audio))
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    window.output_edit.setText(str(output_dir))
+    window.start_separation()
+
+    raw = output_dir / "raw_vocals.wav"
+    raw.write_bytes(b"")
+    window.on_finished({"vocals": str(raw)})
+
+    assert observed, "export was never reached"
+    for enabled, text in observed:
+        assert enabled is False
+        assert text != window.tr("Cancel")
+    assert window.separate_button.text() == window.tr("Separate")
+
+
+def test_cancel_without_worker_is_harmless(qtbot, settings):
+    window = _make_window(qtbot, settings)
+    window.cancel_separation()
+    window.cancel_separation()
+    assert window.separate_button.text() == window.tr("Separate")
 
 
 def test_on_failed_logs_and_resets(qtbot, settings, tmp_path, fake_factory):

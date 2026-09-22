@@ -12,7 +12,7 @@ import os
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout
 
-from separateur_de_stems.core.models import SUPPORTED_EXTENSIONS
+from separateur_de_stems.core.models import is_supported_audio
 
 __all__ = ["DropZone"]
 
@@ -77,5 +77,4 @@ class DropZone(QFrame):
 
     @staticmethod
     def _is_supported(path: str) -> bool:
-        lowered = path.lower()
-        return any(lowered.endswith(extension) for extension in SUPPORTED_EXTENSIONS)
+        return is_supported_audio(path)

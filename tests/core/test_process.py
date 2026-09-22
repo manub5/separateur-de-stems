@@ -128,6 +128,18 @@ def test_run_raises_project_error_with_message(tmp_path):
     assert "boom" in str(excinfo.value)
 
 
+def test_start_rejects_progress_cb(tmp_path):
+    """``progress_cb`` is not part of the contract: progress uses the queue."""
+    runner = SubprocessSeparator(
+        engine_kwargs={},
+        worker_target=echo_worker,
+        worker_args=({"vocals": "out.wav"},),
+    )
+
+    with pytest.raises(ValueError, match="progress_cb"):
+        runner.start(str(tmp_path / "in.wav"), {"vocals"}, progress_cb=lambda p, m: None)
+
+
 def test_run_returns_result_dict(tmp_path):
     runner = SubprocessSeparator(
         engine_kwargs={},

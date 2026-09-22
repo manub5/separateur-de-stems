@@ -104,6 +104,43 @@ def test_drop_uppercase_extension_is_accepted(qtbot):
     assert blocker.args == ["/x/SONG.WAV"]
 
 
+def test_drop_double_extension_is_rejected(qtbot):
+    zone = DropZone()
+    qtbot.addWidget(zone)
+
+    event = _drop_event(["/x/song.wav.exe"])
+    with qtbot.waitSignal(zone.fileRejected) as blocker:
+        zone.dropEvent(event)
+
+    assert blocker.args == ["/x/song.wav.exe"]
+    assert zone.current_file() is None
+    assert event.isAccepted() is False
+
+
+def test_drop_extension_only_basename_is_rejected(qtbot):
+    zone = DropZone()
+    qtbot.addWidget(zone)
+
+    event = _drop_event(["/x/.wav"])
+    with qtbot.waitSignal(zone.fileRejected) as blocker:
+        zone.dropEvent(event)
+
+    assert blocker.args == ["/x/.wav"]
+    assert zone.current_file() is None
+
+
+def test_drop_backup_extension_is_rejected(qtbot):
+    zone = DropZone()
+    qtbot.addWidget(zone)
+
+    event = _drop_event(["/x/song.wav.bak"])
+    with qtbot.waitSignal(zone.fileRejected) as blocker:
+        zone.dropEvent(event)
+
+    assert blocker.args == ["/x/song.wav.bak"]
+    assert zone.current_file() is None
+
+
 def test_supported_drop_accepts_event(qtbot):
     zone = DropZone()
     qtbot.addWidget(zone)
