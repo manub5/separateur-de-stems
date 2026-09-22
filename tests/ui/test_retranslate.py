@@ -178,6 +178,23 @@ def test_settings_dialog_retranslate_ui_updates_labels(qtbot, settings, tmp_path
     assert dialog.clear_button.text() == "Vider le cache"
 
 
+def test_settings_dialog_change_event_language_change_updates_labels(
+    qtbot, settings, tmp_path, app
+):
+    dialog = SettingsDialog(settings, cache_dir=str(tmp_path))
+    qtbot.addWidget(dialog)
+    assert dialog.windowTitle() == "Settings"
+    assert dialog._language_label.text() == "Language"
+
+    i18n.install_translators(app, "fr")
+    event = QEvent(QEvent.Type.LanguageChange)
+    dialog.changeEvent(event)
+
+    assert dialog.windowTitle() == "Réglages"
+    assert dialog._language_label.text() == "Langue"
+    assert dialog._model_folder_label.text() == "Dossier des modèles"
+
+
 def test_drop_zone_retranslate_ui_updates_label(qtbot, app):
     zone = DropZone()
     qtbot.addWidget(zone)

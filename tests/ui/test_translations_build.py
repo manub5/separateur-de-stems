@@ -83,10 +83,15 @@ def test_lrelease_compiles_copy_in_temporary_dir(tmp_path):
     assert Path(build_translations.qm_path("fr")).is_file()
 
 
-def test_build_returns_zero_and_writes_catalog():
+def test_build_returns_zero_and_writes_catalog(tmp_path, monkeypatch):
+    ts_copy = tmp_path / "stem_separator_fr.ts"
+    qm_copy = tmp_path / "stem_separator_fr.qm"
+    monkeypatch.setattr(build_translations, "ts_path", lambda language="fr": str(ts_copy))
+    monkeypatch.setattr(build_translations, "qm_path", lambda language="fr": str(qm_copy))
+
     assert build_translations.build() == 0
-    assert Path(build_translations.qm_path("fr")).stat().st_size > 0
-    assert Path(build_translations.ts_path("fr")).is_file()
+    assert qm_copy.stat().st_size > 0
+    assert ts_copy.is_file()
 
 
 def test_build_writes_catalog_on_temporary_copy(tmp_path, monkeypatch):
@@ -127,7 +132,23 @@ def test_build_check_does_not_touch_committed_files():
     assert qm_file.stat().st_mtime_ns == qm_mtime_before
 
 
-def test_build_check_passes_after_build():
+def test_committed_catalog_is_fresh():
+    """The committed ``.qm`` must match the sources scanned by lupdate.
+
+    ``build(check=True)`` refreshes and compiles a temporary copy and compares
+    it to the committed catalog without writing anything. It returns 1 when a
+    ``tr()`` string was edited (or added) without regenerating the ``.ts`` /
+    ``.qm`` pair, so a stale catalog fails here before it ships.
+    """
+    assert build_translations.build(check=True) == 0
+
+
+def test_build_check_passes_after_build(tmp_path, monkeypatch):
+    ts_copy = tmp_path / "stem_separator_fr.ts"
+    qm_copy = tmp_path / "stem_separator_fr.qm"
+    monkeypatch.setattr(build_translations, "ts_path", lambda language="fr": str(ts_copy))
+    monkeypatch.setattr(build_translations, "qm_path", lambda language="fr": str(qm_copy))
+
     assert build_translations.build() == 0
     assert build_translations.build(check=True) == 0
 

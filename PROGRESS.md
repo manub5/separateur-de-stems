@@ -9,7 +9,12 @@
 - Phase 2 / Plan A (UI) terminé : fenêtre principale (`MainWindow`), worker
   QThread pilote de `SubprocessSeparator`, glisser-déposer (`DropZone`),
   réglages persistés (`QSettings`), dialogue de préférences et test de fumée
-  de l'application. Suite de tests complète (211 tests) verte en offscreen.
+  de l'application.
+- Phase 2 / Plan B (i18n) terminé : catalogues FR compilés (`.ts`/`.qm`),
+  libellés `tr()` extraits, changement de langue à chaud via
+  `LanguageChange`/`retranslate_ui` (fenêtre, dialogue de réglages, zone de
+  dépôt), langue chargée au démarrage, garde de fraîcheur du catalogue
+  (`build(check=True)`). Suite de tests complète (267 tests) verte en offscreen.
 
 ## En cours
 
@@ -17,7 +22,6 @@
 
 ## À faire
 
-- Phase 2 / Plan B : internationalisation (traductions FR/EN, choix mémorisé).
 - Phase 2 / Plan C : empaquetage (PyInstaller + workflow macOS Apple Silicon).
 
 ## Bloqué

@@ -8,7 +8,7 @@ point at a temporary directory instead of the real cache.
 import shutil
 from pathlib import Path
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QEvent, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -161,6 +161,11 @@ class SettingsDialog(QDialog):
         return self.tr("Cache cleared")
 
     # -- QDialog ----------------------------------------------------------
+
+    def changeEvent(self, event) -> None:
+        if event.type() == QEvent.Type.LanguageChange:
+            self.retranslate_ui()
+        super().changeEvent(event)
 
     def accept(self) -> None:
         previous = self._settings.language
