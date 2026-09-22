@@ -102,3 +102,23 @@ def test_drop_uppercase_extension_is_accepted(qtbot):
         zone.dropEvent(event)
 
     assert blocker.args == ["/x/SONG.WAV"]
+
+
+def test_supported_drop_accepts_event(qtbot):
+    zone = DropZone()
+    qtbot.addWidget(zone)
+
+    event = _drop_event(["/x/song.wav"])
+    zone.dropEvent(event)
+
+    assert event.isAccepted() is True
+
+
+def test_unsupported_drop_ignores_event(qtbot):
+    zone = DropZone()
+    qtbot.addWidget(zone)
+
+    event = _drop_event(["/x/song.ogg"])
+    zone.dropEvent(event)
+
+    assert event.isAccepted() is False

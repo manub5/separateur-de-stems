@@ -25,6 +25,8 @@ class DropZone(QFrame):
     Signals:
         fileDropped: path of the first supported local file dropped.
         fileRejected: first dropped path that is not usable, or a message.
+            The payload is a raw path (not a translated sentence) when a path
+            exists; the interface is responsible for mapping it to a message.
     """
 
     fileDropped = Signal(str)
@@ -68,7 +70,9 @@ class DropZone(QFrame):
             if self._is_supported(path):
                 self.set_file(path)
                 self.fileDropped.emit(path)
+                event.acceptProposedAction()
                 return
+        event.ignore()
         self.fileRejected.emit(paths[0] if paths else self.tr("Unsupported drop"))
 
     @staticmethod
