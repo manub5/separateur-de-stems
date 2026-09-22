@@ -606,6 +606,12 @@ def test_build_parser_accepts_argv_none(monkeypatch):
 
 
 def test_no_qt_import():
+    import subprocess
     import sys
 
-    assert "PySide6" not in sys.modules
+    code = (
+        "import sys; import separateur_de_stems.cli; "
+        "assert 'PySide6' not in sys.modules, 'cli imported Qt'"
+    )
+    result = subprocess.run([sys.executable, "-c", code], capture_output=True)
+    assert result.returncode == 0, result.stderr.decode()
