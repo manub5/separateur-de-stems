@@ -9,6 +9,7 @@ Linux. Those branches are validated with mocks and must be re-checked on an
 Apple Silicon machine before release.
 """
 
+import os
 import platform
 import sys
 from pathlib import Path
@@ -18,6 +19,7 @@ __all__ = [
     "torch_device_hint",
     "onnx_provider_hint",
     "ffmpeg_executable",
+    "ensure_bundled_ffmpeg_on_path",
 ]
 
 
@@ -34,6 +36,51 @@ def ffmpeg_executable() -> str:
         if bundled.is_file():
             return str(bundled)
     return "ffmpeg"
+
+
+def _bundled_ffmpeg_path() -> str | None:
+    """Return the bundled ffmpeg binary path, or None when unavailable."""
+    bundle_root = getattr(sys, "_MEIPASS", None)
+    if not bundle_root:
+        return None
+    bundled = Path(bundle_root) / "ffmpeg" / "ffmpeg"
+    if bundled.is_file() and os.access(bundled, os.X_OK):
+        return str(bundled)
+    return None
+
+
+def ensure_bundled_ffmpeg_on_path() -> str | None:
+    """Expose the bundled ffmpeg on PATH and to pydub, when frozen.
+
+    ``audio-separator`` calls ``subprocess.check_output(["ffmpeg", "-version"])``
+    and ``pydub`` resolves ffmpeg through ``PATH`` (its ``which`` helper and
+    ``AudioSegment.converter``). On a machine without a system ffmpeg, the
+    bundled binary must therefore be discoverable. This prepends its directory
+    to ``os.environ["PATH"]`` and points ``pydub.AudioSegment.converter`` at it.
+
+    Idempotent and a no-op outside a frozen build (no ``sys._MEIPASS``) or when
+    the bundled binary is missing. Returns the binary path, or ``None``.
+    ``pydub`` is imported lazily so importing this module stays light.
+    """
+    binary = _bundled_ffmpeg_path()
+    if binary is None:
+        return None
+
+    ffmpeg_dir = str(Path(binary).parent)
+    path = os.environ.get("PATH", "")
+    entries = path.split(os.pathsep) if path else []
+    if ffmpeg_dir not in entries:
+        os.environ["PATH"] = os.pathsep.join([ffmpeg_dir, *entries])
+
+    try:
+        from pydub import AudioSegment
+
+        AudioSegment.converter = binary
+    except Exception:  # noqa: BLE001 - pydub is optional at import time
+        pass
+
+    return binary
+
 
 
 def is_apple_silicon() -> bool:

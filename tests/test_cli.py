@@ -605,6 +605,19 @@ def test_build_parser_accepts_argv_none(monkeypatch):
     assert code == 0
 
 
+def test_main_calls_ensure_bundled_ffmpeg(monkeypatch, tmp_path):
+    """``main`` defensively exposes the bundled ffmpeg before separating."""
+    calls = []
+    monkeypatch.setattr(
+        cli, "ensure_bundled_ffmpeg_on_path", lambda: calls.append(True)
+    )
+    monkeypatch.setattr(cli, "fetch_catalog", lambda model_dir: {})
+
+    cli.main(["--list-models", "--model-dir", str(tmp_path)])
+
+    assert calls == [True]
+
+
 def test_no_qt_import():
     import subprocess
     import sys

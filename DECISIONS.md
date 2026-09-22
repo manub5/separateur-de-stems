@@ -101,7 +101,24 @@ Python installés sur la machine cible, tout en gardant un bundle raisonnable.
 - **ffmpeg embarqué** : la spécification intègre le binaire ffmpeg et
   `core.platform.ffmpeg_executable` le résout sous
   `sys._MEIPASS/ffmpeg/ffmpeg` en build figé, sinon retombe sur le `PATH`
-  (cf. D-008). Aucune dépendance à un ffmpeg système pour l'utilisateur final.
+  (cf. D-008). `core.platform.ensure_bundled_ffmpeg_on_path` place en outre le
+  dossier ffmpeg en tête de `os.environ["PATH"]` et configure
+  `pydub.AudioSegment.converter` vers le binaire, car `audio-separator` appelle
+  `subprocess.check_output(["ffmpeg", "-version"])` et pydub résout ffmpeg via
+  le `PATH`. Cette fonction est appelée au début du runtime hook PyInstaller
+  (parent et enfants `spawn`) et, défensivement, dans `cli.main` et
+  `ui.app.main` ; elle est idempotente et sans effet hors build figé. Aucune
+  dépendance à un ffmpeg système pour l'utilisateur final, tant pour la
+  séparation que pour l'export MP3.
+- **Identifiant de bundle réel** : `io.github.numa91.stemseparator` (dépôt
+  `numa91`), au lieu du placeholder `com.example.stemseparator`. Stable et
+  unique, il sert d'identité au `.app` macOS et évitera les collisions avec
+  d'autres applications lors d'une future signature/notarisation.
+- **Versions épinglées dans la CI** : le workflow macOS installe des versions
+  exactes (`PySide6==6.11.2`, `audio-separator==0.47.0`, `soundfile==0.14.0`,
+  `pytest==9.1.1`, `pytest-qt==4.5.0`, `pyinstaller==6.22.3`), identiques à la
+  pile validée localement, afin que la CI reproduise l'environnement de
+  développement et de test.
 - **Extension `.qm` committée et embarquée** : les catalogues compilés sont
   versionnés puis inclus dans le bundle (package-data
   `separateur_de_stems.ui` = `i18n/*.qm`, `i18n/*.ts`), et

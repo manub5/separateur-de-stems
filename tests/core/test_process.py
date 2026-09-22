@@ -1,6 +1,8 @@
 """Tests for cancellable subprocess separation runner (no ML, no network)."""
 
 import multiprocessing
+import os
+import sys
 import threading
 import time
 
@@ -12,6 +14,7 @@ from separateur_de_stems.core.errors import (
     StemSeparatorError,
 )
 from separateur_de_stems.core.process import SubprocessSeparator
+from separateur_de_stems.core.platform import ensure_bundled_ffmpeg_on_path
 
 
 def sleeping_worker(queue, input_path, stems, sleep_seconds, progress_queue=None):
@@ -27,6 +30,24 @@ def echo_worker(queue, input_path, stems, payload, progress_queue=None):
     """Returns a serializable result dict immediately."""
     try:
         queue.put(("ok", dict(payload)))
+    finally:
+        queue.close()
+
+
+def env_echo_worker(queue, input_path, stems, progress_queue=None):
+    """Returns the PATH and ffmpeg resolution seen inside the child process."""
+    from pydub.utils import which
+
+    try:
+        queue.put(
+            (
+                "ok",
+                {
+                    "path": os.environ.get("PATH", ""),
+                    "which": which("ffmpeg"),
+                },
+            )
+        )
     finally:
         queue.close()
 
@@ -305,6 +326,42 @@ def _collect_progress(runner, timeout):
             return messages, outcome
         time.sleep(0.05)
     raise AssertionError("runner did not reach a terminal status in time")
+
+
+def test_spawn_child_sees_bundled_ffmpeg_on_path(monkeypatch, tmp_path):
+    """A spawned child inherits the PATH we prepend to ``os.environ``.
+
+    This mirrors the frozen app: ``ensure_bundled_ffmpeg_on_path`` runs first,
+    then ``SubprocessSeparator`` spawns the child, which must see the bundled
+    ffmpeg directory on its PATH. ``sys._MEIPASS`` is a per-process attribute
+    (not inherited by ``spawn``), so the child relies on the parent's PATH and
+    on its own runtime-hook/entry-point re-initialisation in a real bundle.
+    """
+    bundle = tmp_path / "bundle"
+    ffmpeg_dir = bundle / "ffmpeg"
+    ffmpeg_dir.mkdir(parents=True)
+    binary = ffmpeg_dir / "ffmpeg"
+    binary.write_bytes(b"#!/bin/sh\n")
+    binary.chmod(0o755)
+    monkeypatch.setattr(sys, "_MEIPASS", str(bundle), raising=False)
+
+    original_path = os.environ.get("PATH")
+    try:
+        assert ensure_bundled_ffmpeg_on_path() == str(binary)
+
+        runner = SubprocessSeparator(
+            engine_kwargs={}, worker_target=env_echo_worker
+        )
+
+        result = runner.run(str(tmp_path / "in.wav"), {"vocals"})
+
+        assert result["path"].split(os.pathsep)[0] == str(ffmpeg_dir)
+        assert result["which"] == str(binary)
+    finally:
+        if original_path is None:
+            os.environ.pop("PATH", None)
+        else:
+            os.environ["PATH"] = original_path
 
 
 def _wait_status(runner, timeout):

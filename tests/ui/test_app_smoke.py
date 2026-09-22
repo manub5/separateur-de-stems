@@ -118,6 +118,21 @@ def test_main_does_not_crash_with_unknown_language(qtbot, settings, monkeypatch)
     assert calls == ["de"]
 
 
+def test_main_calls_ensure_bundled_ffmpeg(qtbot, settings, monkeypatch):
+    """``main`` defensively exposes the bundled ffmpeg at startup."""
+    calls = []
+    monkeypatch.setattr(app_module, "Settings", lambda: settings)
+    monkeypatch.setattr(
+        app_module, "ensure_bundled_ffmpeg_on_path", lambda: calls.append(True)
+    )
+    monkeypatch.setattr(QApplication, "exec", lambda self: 0)
+
+    exit_code = app_module.main([])
+
+    assert exit_code == 0
+    assert calls == [True]
+
+
 def test_main_help_exits_zero_without_crash(capsys):
     """``--help`` prints usage and never raises."""
     with pytest.raises(SystemExit) as excinfo:

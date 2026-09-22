@@ -11,11 +11,24 @@ import time
 from typing import Callable, Optional
 
 from separateur_de_stems.core.errors import CancelledError, StemSeparatorError
+from separateur_de_stems.core.platform import ensure_bundled_ffmpeg_on_path
 
 _TERMINATE_TIMEOUT = 5.0
 _POLL_SLICE = 0.05
 _DRAIN_SLICE = 0.05
 _DRAIN_BUDGET = 2.0
+
+
+def _child_entry_point(
+    worker_target, queue, input_path, stems, *args, progress_queue=None
+):
+    """Spawn-safe child entry: prepare the bundled ffmpeg, then run the worker.
+
+    Spawn requires a picklable target, so the real worker is forwarded as an
+    argument rather than closed over.
+    """
+    ensure_bundled_ffmpeg_on_path()
+    worker_target(queue, input_path, stems, *args, progress_queue=progress_queue)
 
 
 def _default_worker(queue, input_path, stems, engine_kwargs, progress_queue=None):
@@ -99,8 +112,14 @@ class SubprocessSeparator:
             self._ensure_progress_queue()
             self._queue = self._context.Queue()
             self._process = self._context.Process(
-                target=self._worker_target,
-                args=(self._queue, input_path, stems, *self._worker_args),
+                target=_child_entry_point,
+                args=(
+                    self._worker_target,
+                    self._queue,
+                    input_path,
+                    stems,
+                    *self._worker_args,
+                ),
                 kwargs={"progress_queue": self._progress_queue},
             )
             self._process.start()

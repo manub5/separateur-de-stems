@@ -51,6 +51,17 @@ def test_workflow_installs_python_and_dependencies():
     assert "pyinstaller" in text.lower()
 
 
+def test_workflow_pins_dependency_versions():
+    """Dependencies are pinned to the locally validated stack."""
+    text = _workflow_text()
+    assert "PySide6==6.11.2" in text
+    assert "audio-separator==0.47.0" in text
+    assert "pyinstaller==6.22.3" in text
+    assert "soundfile==" in text
+    assert "pytest==" in text
+    assert "pytest-qt==" in text
+
+
 def test_workflow_installs_ffmpeg():
     assert "brew install ffmpeg" in _workflow_text()
 

@@ -69,6 +69,6 @@ if sys.platform == "darwin":
     app = BUNDLE(
         coll,
         name=f"{APP_NAME}.app",
-        bundle_identifier="com.example.stemseparator",
+        bundle_identifier="io.github.numa91.stemseparator",
         info_plist={"NSHighResolutionCapable": True},
     )

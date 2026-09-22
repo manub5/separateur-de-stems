@@ -16,6 +16,7 @@ from separateur_de_stems.core.errors import (
 from separateur_de_stems.core.export import to_mp3_320, to_wav24
 from separateur_de_stems.core.models import STEM_TO_MODEL
 from separateur_de_stems.core.naming import sanitize, stem_filename
+from separateur_de_stems.core.platform import ensure_bundled_ffmpeg_on_path
 
 CANONICAL_STEMS = tuple(STEM_TO_MODEL.keys())
 DEFAULT_STEMS = "vocals,instrumental"
@@ -67,6 +68,8 @@ def parse_stems(raw: str) -> set[str]:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
+    ensure_bundled_ffmpeg_on_path()
+
     parser = build_parser()
     args = parser.parse_args(argv)
 

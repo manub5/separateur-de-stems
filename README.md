@@ -96,7 +96,10 @@ packaging/build_linux.sh
 ```
 
 Sous Linux, ffmpeg est détecté dans le `PATH` ; il est intégré au bundle par la
-spécification PyInstaller.
+spécification PyInstaller. Dans l'application figée, le ffmpeg embarqué est
+exposé automatiquement : son dossier est placé en tête du `PATH` et pydub est
+configuré pour l'utiliser, de sorte que `audio-separator` (qui appelle
+`ffmpeg -version`) et l'export MP3 fonctionnent **sans ffmpeg système**.
 
 **macOS (Apple Silicon) :**
 
@@ -215,7 +218,10 @@ packaging/build_linux.sh
 ```
 
 On Linux, ffmpeg is detected on the `PATH`; it is bundled by the PyInstaller
-spec.
+spec. In the frozen app the bundled ffmpeg is exposed automatically: its
+directory is prepended to `PATH` and pydub is pointed at it, so
+`audio-separator` (which calls `ffmpeg -version`) and the MP3 export both work
+**without a system ffmpeg**.
 
 **macOS (Apple Silicon):**
 

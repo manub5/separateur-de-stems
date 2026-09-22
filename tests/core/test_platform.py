@@ -6,6 +6,7 @@ tests emulate Darwin/arm64 with mocks and a fake torch injected in
 """
 
 import builtins
+import os
 import sys
 import types
 
@@ -163,6 +164,140 @@ def test_ffmpeg_executable_ignores_directory_named_ffmpeg(monkeypatch, tmp_path)
     monkeypatch.setattr(sys, "_MEIPASS", str(bundle), raising=False)
 
     assert platform_mod.ffmpeg_executable() == "ffmpeg"
+
+
+@pytest.fixture
+def restore_path():
+    """Restore ``os.environ["PATH"]`` and pydub converter after each test."""
+    original = os.environ.get("PATH")
+    from pydub import AudioSegment
+
+    original_converter = AudioSegment.converter
+    yield
+    if original is None:
+        os.environ.pop("PATH", None)
+    else:
+        os.environ["PATH"] = original
+    AudioSegment.converter = original_converter
+
+
+def _make_bundled_ffmpeg(tmp_path):
+    bundle = tmp_path / "bundle"
+    ffmpeg_dir = bundle / "ffmpeg"
+    ffmpeg_dir.mkdir(parents=True)
+    binary = ffmpeg_dir / "ffmpeg"
+    binary.write_bytes(b"#!/bin/sh\n")
+    binary.chmod(0o755)
+    return bundle, ffmpeg_dir, binary
+
+
+def test_ensure_bundled_ffmpeg_prepends_directory_to_path(
+    monkeypatch, tmp_path, restore_path
+):
+    bundle, ffmpeg_dir, binary = _make_bundled_ffmpeg(tmp_path)
+    monkeypatch.setattr(sys, "_MEIPASS", str(bundle), raising=False)
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+
+    result = platform_mod.ensure_bundled_ffmpeg_on_path()
+
+    assert result == str(binary)
+    assert os.environ["PATH"].split(os.pathsep)[0] == str(ffmpeg_dir)
+
+
+def test_ensure_bundled_ffmpeg_sets_pydub_converter(
+    monkeypatch, tmp_path, restore_path
+):
+    from pydub import AudioSegment
+
+    bundle, _, binary = _make_bundled_ffmpeg(tmp_path)
+    monkeypatch.setattr(sys, "_MEIPASS", str(bundle), raising=False)
+
+    platform_mod.ensure_bundled_ffmpeg_on_path()
+
+    assert AudioSegment.converter == str(binary)
+
+
+def test_ensure_bundled_ffmpeg_is_idempotent(monkeypatch, tmp_path, restore_path):
+    bundle, ffmpeg_dir, _ = _make_bundled_ffmpeg(tmp_path)
+    monkeypatch.setattr(sys, "_MEIPASS", str(bundle), raising=False)
+
+    platform_mod.ensure_bundled_ffmpeg_on_path()
+    first_path = os.environ["PATH"]
+    platform_mod.ensure_bundled_ffmpeg_on_path()
+
+    assert os.environ["PATH"] == first_path
+    entries = os.environ["PATH"].split(os.pathsep)
+    assert entries.count(str(ffmpeg_dir)) == 1
+
+
+def test_ensure_bundled_ffmpeg_noop_without_meipass(monkeypatch, restore_path):
+    from pydub import AudioSegment
+
+    monkeypatch.delattr(sys, "_MEIPASS", raising=False)
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    original_converter = AudioSegment.converter
+
+    result = platform_mod.ensure_bundled_ffmpeg_on_path()
+
+    assert result is None
+    assert os.environ["PATH"] == "/usr/bin:/bin"
+    assert AudioSegment.converter == original_converter
+
+
+def test_ensure_bundled_ffmpeg_noop_when_binary_missing(
+    monkeypatch, tmp_path, restore_path
+):
+    bundle = tmp_path / "bundle"
+    (bundle / "ffmpeg").mkdir(parents=True)
+    monkeypatch.setattr(sys, "_MEIPASS", str(bundle), raising=False)
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+
+    result = platform_mod.ensure_bundled_ffmpeg_on_path()
+
+    assert result is None
+    assert os.environ["PATH"] == "/usr/bin:/bin"
+
+
+def test_ensure_bundled_ffmpeg_ignores_non_executable_binary(
+    monkeypatch, tmp_path, restore_path
+):
+    bundle, _, binary = _make_bundled_ffmpeg(tmp_path)
+    binary.chmod(0o644)
+    monkeypatch.setattr(sys, "_MEIPASS", str(bundle), raising=False)
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+
+    result = platform_mod.ensure_bundled_ffmpeg_on_path()
+
+    assert result is None
+    assert os.environ["PATH"] == "/usr/bin:/bin"
+
+
+def test_ensure_bundled_ffmpeg_keeps_existing_path_entries(
+    monkeypatch, tmp_path, restore_path
+):
+    bundle, ffmpeg_dir, _ = _make_bundled_ffmpeg(tmp_path)
+    monkeypatch.setattr(sys, "_MEIPASS", str(bundle), raising=False)
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+
+    platform_mod.ensure_bundled_ffmpeg_on_path()
+
+    entries = os.environ["PATH"].split(os.pathsep)
+    assert entries[0] == str(ffmpeg_dir)
+    assert "/usr/bin" in entries
+    assert "/bin" in entries
+
+
+def test_ensure_bundled_ffmpeg_seen_by_pydub_which(monkeypatch, tmp_path, restore_path):
+    """The spawned children inherit ``os.environ``; ``pydub.utils.which`` too."""
+    from pydub.utils import which
+
+    bundle, _, binary = _make_bundled_ffmpeg(tmp_path)
+    monkeypatch.setattr(sys, "_MEIPASS", str(bundle), raising=False)
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+
+    platform_mod.ensure_bundled_ffmpeg_on_path()
+
+    assert which("ffmpeg") == str(binary)
 
 
 def test_module_import_does_not_import_torch(monkeypatch):

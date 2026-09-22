@@ -5,6 +5,7 @@ import sys
 
 from PySide6.QtWidgets import QApplication
 
+from separateur_de_stems.core.platform import ensure_bundled_ffmpeg_on_path
 from separateur_de_stems.ui import i18n
 from separateur_de_stems.ui.main_window import MainWindow
 from separateur_de_stems.ui.settings import Settings
@@ -26,6 +27,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    ensure_bundled_ffmpeg_on_path()
+
     args = build_parser().parse_args(argv)
 
     app = QApplication.instance() or QApplication(sys.argv[:1])
