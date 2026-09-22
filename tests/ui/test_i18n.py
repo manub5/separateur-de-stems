@@ -73,10 +73,10 @@ def test_install_translators_fr_then_en(app):
 
 def test_french_translation_is_actually_loaded(app):
     assert i18n.install_translators(app, "fr") == "fr"
-    assert QCoreApplication.translate("TestContext", "Separate") == "Séparer"
+    assert QCoreApplication.translate("MainWindow", "Done") == "Terminé"
 
 
 def test_english_restores_source_string(app):
     i18n.install_translators(app, "fr")
     i18n.install_translators(app, "en")
-    assert QCoreApplication.translate("TestContext", "Separate") == "Separate"
+    assert QCoreApplication.translate("MainWindow", "Done") == "Done"
