@@ -14,7 +14,7 @@ from separateur_de_stems.core.errors import (
 from separateur_de_stems.core.process import SubprocessSeparator
 
 
-def sleeping_worker(queue, input_path, stems, sleep_seconds):
+def sleeping_worker(queue, input_path, stems, sleep_seconds, progress_queue=None):
     """Simulates a long separation that never finishes on its own."""
     try:
         time.sleep(sleep_seconds)
@@ -23,7 +23,7 @@ def sleeping_worker(queue, input_path, stems, sleep_seconds):
         queue.close()
 
 
-def echo_worker(queue, input_path, stems, payload):
+def echo_worker(queue, input_path, stems, payload, progress_queue=None):
     """Returns a serializable result dict immediately."""
     try:
         queue.put(("ok", dict(payload)))
@@ -31,12 +31,34 @@ def echo_worker(queue, input_path, stems, payload):
         queue.close()
 
 
-def failing_worker(queue, input_path, stems, message):
+def failing_worker(queue, input_path, stems, message, progress_queue=None):
     """Raises a project error inside the subprocess."""
     try:
         raise OutputError(message)
     except OutputError as error:
         queue.put(("error", str(error)))
+    finally:
+        queue.close()
+
+
+def _sleeping_progress_worker(queue, input_path, stems, sleep_seconds, progress_queue=None):
+    """Sleeps, then reports a result; drains progress messages meanwhile."""
+    try:
+        deadline = time.monotonic() + sleep_seconds
+        while time.monotonic() < deadline:
+            time.sleep(0.05)
+        queue.put(("ok", {"vocals": "vocals.wav"}))
+    finally:
+        queue.close()
+
+
+def _progress_emitting_worker(queue, input_path, stems, progress_queue=None):
+    """Emits progress messages then a terminal result."""
+    try:
+        if progress_queue is not None:
+            progress_queue.put((10, "Loading model"))
+            progress_queue.put((50, "Separating"))
+        queue.put(("ok", {"vocals": "vocals.wav"}))
     finally:
         queue.close()
 
@@ -177,6 +199,65 @@ def test_cancel_is_idempotent(tmp_path):
     status, _ = _wait_status(runner, timeout=10)
     assert status == "cancelled"
     assert not any(p.is_alive() for p in multiprocessing.active_children())
+
+
+def test_start_twice_raises_runtime_error(tmp_path):
+    runner = SubprocessSeparator(
+        engine_kwargs={},
+        worker_target=_sleeping_progress_worker,
+        worker_args=(30,),
+    )
+    runner.start(str(tmp_path / "in.wav"), {"vocals"})
+
+    try:
+        with pytest.raises(RuntimeError, match="separation already running"):
+            runner.start(str(tmp_path / "in.wav"), {"vocals"})
+    finally:
+        runner.cancel()
+
+
+def test_poll_progress_collects_worker_messages(tmp_path):
+    context = multiprocessing.get_context("spawn")
+    progress_queue = context.Queue()
+    runner = SubprocessSeparator(
+        engine_kwargs={},
+        worker_target=_progress_emitting_worker,
+        worker_args=(),
+        progress_queue=progress_queue,
+    )
+    runner.start(str(tmp_path / "in.wav"), {"vocals"})
+
+    messages, outcome = _collect_progress(runner, timeout=10)
+    status, result = outcome
+    assert status == "ok"
+    assert result == {"vocals": "vocals.wav"}
+    assert (10, "Loading model") in messages
+    assert (50, "Separating") in messages
+
+
+def test_run_without_progress_queue_still_returns_result(tmp_path):
+    runner = SubprocessSeparator(
+        engine_kwargs={},
+        worker_target=echo_worker,
+        worker_args=({"vocals": "out.wav"},),
+    )
+
+    result = runner.run(str(tmp_path / "in.wav"), {"vocals"})
+
+    assert result == {"vocals": "out.wav"}
+
+
+def _collect_progress(runner, timeout):
+    deadline = time.monotonic() + timeout
+    messages = []
+    while time.monotonic() < deadline:
+        messages.extend(runner.poll_progress())
+        outcome = runner.poll(timeout=0)
+        if outcome is not None:
+            messages.extend(runner.poll_progress())
+            return messages, outcome
+        time.sleep(0.05)
+    raise AssertionError("runner did not reach a terminal status in time")
 
 
 def _wait_status(runner, timeout):

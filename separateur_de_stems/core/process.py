@@ -5,7 +5,9 @@ request cancellation without waiting indefinitely. No Qt dependency.
 """
 
 import multiprocessing
+import queue as queue_module
 import threading
+import time
 from typing import Callable, Optional
 
 from separateur_de_stems.core.errors import CancelledError, StemSeparatorError
@@ -13,15 +15,22 @@ from separateur_de_stems.core.errors import CancelledError, StemSeparatorError
 _TERMINATE_TIMEOUT = 5.0
 _POLL_SLICE = 0.05
 _DRAIN_TIMEOUT = 1.0
+_DRAIN_SLICE = 0.05
+_DRAIN_BUDGET = 2.0
 
 
-def _default_worker(queue, input_path, stems, engine_kwargs):
+def _default_worker(queue, input_path, stems, engine_kwargs, progress_queue=None):
     """Real worker: runs a SeparationEngine inside the child process."""
     try:
         from separateur_de_stems.core.engine import SeparationEngine
 
         engine = SeparationEngine(**engine_kwargs)
-        result = engine.run(input_path, stems)
+
+        def progress_cb(percent, stage):
+            if progress_queue is not None:
+                progress_queue.put((percent, stage))
+
+        result = engine.run(input_path, stems, progress_cb=progress_cb)
         queue.put(("ok", dict(result)))
     except StemSeparatorError as error:
         queue.put(("error", str(error)))
@@ -47,6 +56,7 @@ class SubprocessSeparator:
         worker_target=None,
         context=None,
         worker_args=(),
+        progress_queue=None,
     ):
         self._engine_kwargs = dict(engine_kwargs)
         self._worker_target = worker_target or _default_worker
@@ -54,6 +64,7 @@ class SubprocessSeparator:
             tuple(worker_args) if worker_target is not None else (self._engine_kwargs,)
         )
         self._context = context or multiprocessing.get_context("spawn")
+        self._progress_queue = progress_queue
         self._queue = None
         self._process = None
         self._cancelled = threading.Event()
@@ -67,6 +78,8 @@ class SubprocessSeparator:
     ) -> None:
         del progress_cb
         with self._lock:
+            if self._process is not None:
+                raise RuntimeError("separation already running")
             if self._cancelled.is_set():
                 return
 
@@ -74,8 +87,23 @@ class SubprocessSeparator:
             self._process = self._context.Process(
                 target=self._worker_target,
                 args=(self._queue, input_path, stems, *self._worker_args),
+                kwargs={"progress_queue": self._progress_queue},
             )
             self._process.start()
+
+    def poll_progress(self) -> list:
+        progress_queue = self._progress_queue
+        if progress_queue is None:
+            return []
+        messages = []
+        while True:
+            try:
+                messages.append(progress_queue.get_nowait())
+            except queue_module.Empty:
+                break
+            except Exception:  # noqa: BLE001
+                break
+        return messages
 
     def poll(self, timeout: float = 0):
         with self._lock:
@@ -120,15 +148,26 @@ class SubprocessSeparator:
 
     def _drain_locked(self, process):
         queue = self._queue
-        try:
-            status, payload = queue.get(timeout=_DRAIN_TIMEOUT)
-        except Exception:  # noqa: BLE001
-            self._finish_locked(process, queue)
+        status, payload = self._drain_result(queue)
+        self._finish_locked(process, queue)
+        if status is None:
             if self._cancelled.is_set():
                 return ("cancelled", None)
             return ("error", "unexpected: worker exited without a result")
-        self._finish_locked(process, queue)
         return (status, payload)
+
+    def _drain_result(self, queue):
+        deadline = time.monotonic() + _DRAIN_BUDGET
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return (None, None)
+            try:
+                return queue.get(timeout=min(_DRAIN_SLICE, remaining))
+            except queue_module.Empty:
+                continue
+            except Exception:  # noqa: BLE001
+                return (None, None)
 
     def _finish_locked(self, process, queue) -> None:
         self._process = None
@@ -139,8 +178,18 @@ class SubprocessSeparator:
                 queue.join_thread()
             except Exception:  # noqa: BLE001
                 pass
+        self._close_progress_queue()
         if process is not None and not process.is_alive():
             process.join(timeout=_TERMINATE_TIMEOUT)
+
+    def _close_progress_queue(self) -> None:
+        progress_queue = self._progress_queue
+        if progress_queue is None:
+            return
+        try:
+            progress_queue.close()
+        except Exception:  # noqa: BLE001
+            pass
 
     def _terminate_locked(self) -> None:
         process = self._process
@@ -162,3 +211,4 @@ class SubprocessSeparator:
                 queue.close()
             except Exception:  # noqa: BLE001
                 pass
+        self._close_progress_queue()
