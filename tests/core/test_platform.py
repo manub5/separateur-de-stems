@@ -140,6 +140,22 @@ def test_onnx_provider_hint_cpu_when_torch_missing(monkeypatch):
     assert platform_mod.onnx_provider_hint() == "cpu"
 
 
+def test_ffmpeg_executable_prefers_bundled(monkeypatch, tmp_path):
+    bundle = tmp_path / "bundle"
+    bundled = bundle / "ffmpeg" / "ffmpeg"
+    bundled.parent.mkdir(parents=True)
+    bundled.write_bytes(b"")
+    monkeypatch.setattr(sys, "_MEIPASS", str(bundle), raising=False)
+
+    assert platform_mod.ffmpeg_executable() == str(bundled)
+
+
+def test_ffmpeg_executable_falls_back_to_path(monkeypatch):
+    monkeypatch.delattr(sys, "_MEIPASS", raising=False)
+
+    assert platform_mod.ffmpeg_executable() == "ffmpeg"
+
+
 def test_module_import_does_not_import_torch(monkeypatch):
     block_torch_import(monkeypatch)
     sys.modules.pop("torch", None)

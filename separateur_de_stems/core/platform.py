@@ -10,12 +10,30 @@ Apple Silicon machine before release.
 """
 
 import platform
+import sys
+from pathlib import Path
 
 __all__ = [
     "is_apple_silicon",
     "torch_device_hint",
     "onnx_provider_hint",
+    "ffmpeg_executable",
 ]
+
+
+def ffmpeg_executable() -> str:
+    """Return the ffmpeg path to use.
+
+    In a frozen build (PyInstaller) the bundled binary lives under
+    ``<sys._MEIPASS>/ffmpeg/ffmpeg``; otherwise fall back to ``ffmpeg`` so
+    the system PATH is searched.
+    """
+    bundle_root = getattr(sys, "_MEIPASS", None)
+    if bundle_root:
+        bundled = Path(bundle_root) / "ffmpeg" / "ffmpeg"
+        if bundled.exists():
+            return str(bundled)
+    return "ffmpeg"
 
 
 def is_apple_silicon() -> bool:

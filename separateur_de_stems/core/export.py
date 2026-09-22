@@ -2,11 +2,11 @@
 
 import subprocess
 from pathlib import Path
-from shutil import which
 
 import soundfile as sf
 
 from separateur_de_stems.core.errors import OutputError
+from separateur_de_stems.core.platform import ffmpeg_executable
 
 _MP3_BITRATE = "320k"
 _STDERR_TAIL = 400
@@ -52,7 +52,7 @@ def to_mp3_320(src: str, dest: str) -> str:
     target = Path(dest)
     preexisting = target.exists()
 
-    ffmpeg = which("ffmpeg") or "ffmpeg"
+    ffmpeg = ffmpeg_executable()
     args = [
         ffmpeg,
         "-y",

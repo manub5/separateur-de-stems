@@ -1,4 +1,3 @@
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -159,10 +158,32 @@ def test_to_mp3_320_uses_argument_list_without_shell(tmp_path, monkeypatch):
     assert "-b:a" in args
     assert args[args.index("-b:a") + 1] == "320k"
     assert "-y" in args
-    assert args[0] in ("ffmpeg", shutil.which("ffmpeg"))
+    assert args[0] == "ffmpeg"
     assert "shell" not in captured["kwargs"]
     assert captured["kwargs"]["capture_output"] is True
     assert captured["kwargs"]["check"] is True
+
+
+def test_to_mp3_uses_resolved_ffmpeg(tmp_path, monkeypatch):
+    source, _ = write_source(tmp_path)
+    dest = tmp_path / "out" / "stem.mp3"
+    captured = {}
+
+    class Result:
+        stderr = b""
+
+    def fake_run(args, **kwargs):
+        captured["args"] = args
+        Path(dest).parent.mkdir(parents=True, exist_ok=True)
+        Path(dest).write_bytes(b"mp3")
+        return Result()
+
+    monkeypatch.setattr("separateur_de_stems.core.export.ffmpeg_executable", lambda: "/bundle/ffmpeg")
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    to_mp3_320(str(source), str(dest))
+
+    assert captured["args"][0] == "/bundle/ffmpeg"
 
 
 def test_to_mp3_320_missing_source_raises_output_error(tmp_path):
