@@ -156,6 +156,15 @@ def test_ffmpeg_executable_falls_back_to_path(monkeypatch):
     assert platform_mod.ffmpeg_executable() == "ffmpeg"
 
 
+def test_ffmpeg_executable_ignores_directory_named_ffmpeg(monkeypatch, tmp_path):
+    bundle = tmp_path / "bundle"
+    fake_binary = bundle / "ffmpeg" / "ffmpeg"
+    fake_binary.mkdir(parents=True)
+    monkeypatch.setattr(sys, "_MEIPASS", str(bundle), raising=False)
+
+    assert platform_mod.ffmpeg_executable() == "ffmpeg"
+
+
 def test_module_import_does_not_import_torch(monkeypatch):
     block_torch_import(monkeypatch)
     sys.modules.pop("torch", None)

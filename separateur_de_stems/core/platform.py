@@ -31,7 +31,7 @@ def ffmpeg_executable() -> str:
     bundle_root = getattr(sys, "_MEIPASS", None)
     if bundle_root:
         bundled = Path(bundle_root) / "ffmpeg" / "ffmpeg"
-        if bundled.exists():
+        if bundled.is_file():
             return str(bundled)
     return "ffmpeg"
 
