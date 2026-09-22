@@ -209,11 +209,35 @@ def test_start_twice_raises_runtime_error(tmp_path):
     )
     runner.start(str(tmp_path / "in.wav"), {"vocals"})
 
+    children_before = {p.pid for p in multiprocessing.active_children()}
     try:
         with pytest.raises(RuntimeError, match="separation already running"):
             runner.start(str(tmp_path / "in.wav"), {"vocals"})
+        children_after = {p.pid for p in multiprocessing.active_children()}
+        assert children_after == children_before
     finally:
         runner.cancel()
+
+
+def test_instance_can_run_twice_with_progress_queue(tmp_path):
+    context = multiprocessing.get_context("spawn")
+    progress_queue = context.Queue()
+    runner = SubprocessSeparator(
+        engine_kwargs={},
+        worker_target=_progress_emitting_worker,
+        worker_args=(),
+        progress_queue=progress_queue,
+    )
+
+    first = runner.run(str(tmp_path / "in.wav"), {"vocals"})
+    first_progress = _wait_progress(runner, timeout=10)
+    second = runner.run(str(tmp_path / "in.wav"), {"vocals"})
+    second_progress = _wait_progress(runner, timeout=10)
+
+    assert first == {"vocals": "vocals.wav"}
+    assert second == {"vocals": "vocals.wav"}
+    assert (10, "Loading model") in first_progress
+    assert (10, "Loading model") in second_progress
 
 
 def test_poll_progress_collects_worker_messages(tmp_path):
@@ -245,6 +269,17 @@ def test_run_without_progress_queue_still_returns_result(tmp_path):
     result = runner.run(str(tmp_path / "in.wav"), {"vocals"})
 
     assert result == {"vocals": "out.wav"}
+
+
+def _wait_progress(runner, timeout):
+    deadline = time.monotonic() + timeout
+    messages = []
+    while time.monotonic() < deadline:
+        messages.extend(runner.poll_progress())
+        if messages:
+            return messages
+        time.sleep(0.05)
+    return messages
 
 
 def _collect_progress(runner, timeout):

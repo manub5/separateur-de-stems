@@ -14,7 +14,6 @@ from separateur_de_stems.core.errors import CancelledError, StemSeparatorError
 
 _TERMINATE_TIMEOUT = 5.0
 _POLL_SLICE = 0.05
-_DRAIN_TIMEOUT = 1.0
 _DRAIN_SLICE = 0.05
 _DRAIN_BUDGET = 2.0
 
@@ -27,8 +26,12 @@ def _default_worker(queue, input_path, stems, engine_kwargs, progress_queue=None
         engine = SeparationEngine(**engine_kwargs)
 
         def progress_cb(percent, stage):
-            if progress_queue is not None:
+            if progress_queue is None:
+                return
+            try:
                 progress_queue.put((percent, stage))
+            except Exception:  # noqa: BLE001
+                pass
 
         result = engine.run(input_path, stems, progress_cb=progress_cb)
         queue.put(("ok", dict(result)))
@@ -65,6 +68,9 @@ class SubprocessSeparator:
         )
         self._context = context or multiprocessing.get_context("spawn")
         self._progress_queue = progress_queue
+        self._progress_queue_enabled = progress_queue is not None
+        self._progress_queue_closed = False
+        self._pending_progress = []
         self._queue = None
         self._process = None
         self._cancelled = threading.Event()
@@ -83,6 +89,8 @@ class SubprocessSeparator:
             if self._cancelled.is_set():
                 return
 
+            self._pending_progress = []
+            self._ensure_progress_queue()
             self._queue = self._context.Queue()
             self._process = self._context.Process(
                 target=self._worker_target,
@@ -92,18 +100,25 @@ class SubprocessSeparator:
             self._process.start()
 
     def poll_progress(self) -> list:
+        messages = self._pending_progress
+        self._pending_progress = []
         progress_queue = self._progress_queue
-        if progress_queue is None:
-            return []
-        messages = []
-        while True:
-            try:
-                messages.append(progress_queue.get_nowait())
-            except queue_module.Empty:
-                break
-            except Exception:  # noqa: BLE001
-                break
+        if progress_queue is not None:
+            while True:
+                try:
+                    messages.append(progress_queue.get_nowait())
+                except queue_module.Empty:
+                    break
+                except Exception:  # noqa: BLE001
+                    break
         return messages
+
+    def _ensure_progress_queue(self) -> None:
+        if not self._progress_queue_enabled:
+            return
+        if self._progress_queue is None or self._progress_queue_closed:
+            self._progress_queue = self._context.Queue()
+            self._progress_queue_closed = False
 
     def poll(self, timeout: float = 0):
         with self._lock:
@@ -186,10 +201,26 @@ class SubprocessSeparator:
         progress_queue = self._progress_queue
         if progress_queue is None:
             return
+        self._pending_progress.extend(self._drain_progress_queue())
         try:
             progress_queue.close()
         except Exception:  # noqa: BLE001
             pass
+        self._progress_queue_closed = True
+
+    def _drain_progress_queue(self) -> list:
+        progress_queue = self._progress_queue
+        if progress_queue is None:
+            return []
+        messages = []
+        while True:
+            try:
+                messages.append(progress_queue.get_nowait())
+            except queue_module.Empty:
+                break
+            except Exception:  # noqa: BLE001
+                break
+        return messages
 
     def _terminate_locked(self) -> None:
         process = self._process
