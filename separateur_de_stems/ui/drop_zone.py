@@ -16,8 +16,6 @@ from separateur_de_stems.core.models import is_supported_audio
 
 __all__ = ["DropZone"]
 
-_DEFAULT_TEXT = "Drop an audio file here"
-
 
 class DropZone(QFrame):
     """A frame that accepts one local audio file through drag and drop.
@@ -37,7 +35,7 @@ class DropZone(QFrame):
         self._current_file = None
 
         self.setAcceptDrops(True)
-        self.label = QLabel(self.tr(_DEFAULT_TEXT), self)
+        self.label = QLabel(self.tr("Drop an audio file here"), self)
         self.label.setWordWrap(True)
 
         layout = QVBoxLayout(self)
@@ -54,7 +52,7 @@ class DropZone(QFrame):
             name = os.path.basename(path)
             self.label.setText(self.tr("Selected file: {name}").format(name=name))
         else:
-            self.label.setText(self.tr(_DEFAULT_TEXT))
+            self.label.setText(self.tr("Drop an audio file here"))
 
     def dragEnterEvent(self, event) -> None:
         if event.mimeData().hasUrls():

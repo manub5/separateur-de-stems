@@ -15,7 +15,7 @@ _CASES = [
     ("MainWindow", "Done", "Terminé"),
     ("MainWindow", "Separate", "Séparer"),
     ("MainWindow", "Cancel", "Annuler"),
-    ("DropZone", "Unsupported drop", "Dépôt non pris en charge"),
+    ("DropZone", "Drop an audio file here", "Déposez un fichier audio ici"),
     ("SettingsDialog", "Language", "Langue"),
 ]
 

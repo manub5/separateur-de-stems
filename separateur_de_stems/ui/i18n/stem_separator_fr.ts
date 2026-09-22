@@ -4,12 +4,18 @@
 <context>
     <name>DropZone</name>
     <message>
+        <location filename="../drop_zone.py" line="38"/>
         <location filename="../drop_zone.py" line="55"/>
+        <source>Drop an audio file here</source>
+        <translation>Déposez un fichier audio ici</translation>
+    </message>
+    <message>
+        <location filename="../drop_zone.py" line="53"/>
         <source>Selected file: {name}</source>
         <translation>Fichier sélectionné : {name}</translation>
     </message>
     <message>
-        <location filename="../drop_zone.py" line="76"/>
+        <location filename="../drop_zone.py" line="74"/>
         <source>Unsupported drop</source>
         <translation>Dépôt non pris en charge</translation>
     </message>
