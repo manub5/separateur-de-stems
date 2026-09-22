@@ -28,12 +28,6 @@ from separateur_de_stems.ui.settings import Settings
 
 __all__ = ["SettingsDialog"]
 
-_LANGUAGES = (
-    ("system", "System"),
-    ("en", "English"),
-    ("fr", "Français"),
-)
-
 
 class SettingsDialog(QDialog):
     """Edit the persisted preferences and clear the model cache."""
@@ -61,8 +55,12 @@ class SettingsDialog(QDialog):
         model_row.addWidget(browse_button)
 
         self.language_combo = QComboBox(self)
-        for value, label in _LANGUAGES:
-            self.language_combo.addItem(self.tr(label), value)
+        for value, label in (
+            ("system", self.tr("System")),
+            ("en", self.tr("English")),
+            ("fr", self.tr("Français")),
+        ):
+            self.language_combo.addItem(label, value)
 
         clear_button = QPushButton(self.tr("Clear cache"), self)
         clear_button.clicked.connect(self._clear_cache)

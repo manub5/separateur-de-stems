@@ -17,6 +17,9 @@ _CASES = [
     ("MainWindow", "Cancel", "Annuler"),
     ("DropZone", "Drop an audio file here", "Déposez un fichier audio ici"),
     ("SettingsDialog", "Language", "Langue"),
+    ("SettingsDialog", "System", "Système"),
+    ("SettingsDialog", "English", "Anglais"),
+    ("SettingsDialog", "Français", "Français"),
 ]
 
 
@@ -36,7 +39,9 @@ def test_french_install_changes_real_strings(app):
 
     changed = 0
     for context, source, expected in _CASES:
-        if QCoreApplication.translate(context, source) != source:
+        translated = QCoreApplication.translate(context, source)
+        assert translated == expected
+        if translated != source:
             changed += 1
 
     assert changed >= 3

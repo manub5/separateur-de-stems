@@ -188,49 +188,64 @@
 <context>
     <name>SettingsDialog</name>
     <message>
-        <location filename="../settings_dialog.py" line="53"/>
+        <location filename="../settings_dialog.py" line="47"/>
         <source>Settings</source>
         <translation>Réglages</translation>
     </message>
     <message>
-        <location filename="../settings_dialog.py" line="56"/>
+        <location filename="../settings_dialog.py" line="50"/>
         <source>Browse…</source>
         <translation>Parcourir…</translation>
     </message>
     <message>
-        <location filename="../settings_dialog.py" line="67"/>
-        <location filename="../settings_dialog.py" line="116"/>
+        <location filename="../settings_dialog.py" line="59"/>
+        <source>System</source>
+        <translation>Système</translation>
+    </message>
+    <message>
+        <location filename="../settings_dialog.py" line="60"/>
+        <source>English</source>
+        <translation>Anglais</translation>
+    </message>
+    <message>
+        <location filename="../settings_dialog.py" line="61"/>
+        <source>Français</source>
+        <translation>Français</translation>
+    </message>
+    <message>
+        <location filename="../settings_dialog.py" line="65"/>
+        <location filename="../settings_dialog.py" line="114"/>
         <source>Clear cache</source>
         <translation>Vider le cache</translation>
     </message>
     <message>
-        <location filename="../settings_dialog.py" line="71"/>
+        <location filename="../settings_dialog.py" line="69"/>
         <source>Model folder</source>
         <translation>Dossier des modèles</translation>
     </message>
     <message>
-        <location filename="../settings_dialog.py" line="72"/>
+        <location filename="../settings_dialog.py" line="70"/>
         <source>Language</source>
         <translation>Langue</translation>
     </message>
     <message>
-        <location filename="../settings_dialog.py" line="103"/>
+        <location filename="../settings_dialog.py" line="101"/>
         <source>Choose model folder</source>
         <translation>Choisir le dossier des modèles</translation>
     </message>
     <message>
-        <location filename="../settings_dialog.py" line="117"/>
+        <location filename="../settings_dialog.py" line="115"/>
         <source>Delete every cached model file?</source>
         <translation>Supprimer tous les fichiers de modèles en cache ?</translation>
     </message>
     <message>
-        <location filename="../settings_dialog.py" line="127"/>
-        <location filename="../settings_dialog.py" line="139"/>
+        <location filename="../settings_dialog.py" line="125"/>
+        <location filename="../settings_dialog.py" line="137"/>
         <source>Nothing to clear</source>
         <translation>Rien à vider</translation>
     </message>
     <message>
-        <location filename="../settings_dialog.py" line="140"/>
+        <location filename="../settings_dialog.py" line="138"/>
         <source>Cache cleared</source>
         <translation>Cache vidé</translation>
     </message>
