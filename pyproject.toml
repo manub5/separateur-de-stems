@@ -14,6 +14,7 @@ dev = ["pytest", "pytest-qt"]
 
 [project.scripts]
 separateur-de-stems = "separateur_de_stems.cli:main"
+separateur-de-stems-ui = "separateur_de_stems.ui.app:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
