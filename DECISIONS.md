@@ -84,3 +84,40 @@ réelle de l'utilisateur. Le test de fumée ne lance jamais la boucle
 d'événements partagée : `QApplication.exec` est remplacé par un stub, car
 appeler `quit()` sur l'instance partagée corromprait les `waitSignal` des tests
 suivants (pollution inter-tests observée puis corrigée).
+
+## D-011 — Packaging PyInstaller
+
+Raison : livrer une application autonome sans dépendance à un ffmpeg ou un
+Python installés sur la machine cible, tout en gardant un bundle raisonnable.
+
+- **`onedir`** (pas `onefile`) : démarrage plus rapide, chargement des
+  bibliothèques Qt/torch sans extraction temporaire, et arborescence
+  inspectable — `dist/StemSeparator/StemSeparator` sous Linux,
+  `StemSeparator.app` sous macOS.
+- **Modèles hors bundle** : les modèles UVR ne sont pas embarqués dans
+  l'archive ; ils vivent sous `models/` en développement et, une fois figé,
+  sous `AppDataLocation/StemSeparator` (cf. D-008). Cela évite un bundle de
+  plusieurs gigaoctets et permet de mettre à jour les modèles indépendamment.
+- **ffmpeg embarqué** : la spécification intègre le binaire ffmpeg et
+  `core.platform.ffmpeg_executable` le résout sous
+  `sys._MEIPASS/ffmpeg/ffmpeg` en build figé, sinon retombe sur le `PATH`
+  (cf. D-008). Aucune dépendance à un ffmpeg système pour l'utilisateur final.
+- **Extension `.qm` committée et embarquée** : les catalogues compilés sont
+  versionnés puis inclus dans le bundle (package-data
+  `separateur_de_stems.ui` = `i18n/*.qm`, `i18n/*.ts`), et
+  `scripts/build_translations.py --check` garantit leur fraîcheur en CI.
+- **torch CPU/MPS dans la CI macOS** : sur `macos-14` arm64, les roues torch
+  par défaut sont CPU/MPS ; aucun extra CUDA n'est installé (la pile CUDA,
+  multi-gigaoctets, n'existe que sous Linux). Le bundle Linux local pèse
+  environ 5,8 Go précisément parce qu'il embarque la variante CUDA.
+- **Artefact macOS + repli GitHub Release** : le workflow produit
+  `StemSeparator-macos.zip` via `ditto` et le publie comme artefact
+  (`actions/upload-artifact`). Si l'archive dépasse la limite de taille des
+  artefacts GitHub (≈2 Go), repli documenté : publier l'archive comme ressource
+  de *release* (`gh release upload`) et ne garder qu'un petit pointeur/checksum.
+- **Application non signée** : pas de signature ni de notarisation Apple
+  (pas de certificat). Le README FR/EN décrit la procédure de premier lancement
+  (Réglages Système > Confidentialité et sécurité > « Ouvrir quand même »).
+- **Actions GitHub épinglées par SHA** : toutes les `uses:` sont figées sur un
+  SHA de commit (avec la version en commentaire), exigence semgrep et garantie
+  de reproductibilité face aux étiquettes mouvantes.
