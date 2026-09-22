@@ -34,7 +34,9 @@ def available_languages() -> list[str]:
 def i18n_dir() -> Path:
     """Directory holding the compiled translation files."""
     if paths.is_frozen():
-        meipass = getattr(sys, "_MEIPASS", "")
+        meipass = getattr(sys, "_MEIPASS", None)
+        if not meipass:
+            return Path(__file__).resolve().parent / "i18n"
         return Path(meipass) / "separateur_de_stems" / "ui" / "i18n"
     return Path(__file__).resolve().parent / "i18n"
 

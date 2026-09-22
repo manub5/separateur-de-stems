@@ -2,11 +2,12 @@
 
 The system locale of the development machine is already French, so the
 "system -> English" case must mock ``QLocale.system()`` to be meaningful.
-Qt is run in offscreen mode.
+Qt is run in offscreen mode. Each test leaves the application back on
+English so the global translator state does not leak between tests.
 """
 
 import pytest
-from PySide6.QtCore import QLocale
+from PySide6.QtCore import QCoreApplication, QLocale
 from PySide6.QtWidgets import QApplication
 
 from separateur_de_stems.ui import i18n
@@ -15,6 +16,12 @@ from separateur_de_stems.ui import i18n
 @pytest.fixture(scope="module")
 def app():
     return QApplication.instance() or QApplication([])
+
+
+@pytest.fixture(autouse=True)
+def restore_english(app):
+    yield
+    i18n.install_translators(app, "en")
 
 
 def test_available_languages_contains_system_and_fr():
@@ -54,6 +61,22 @@ def test_i18n_dir_contains_source_file():
     assert source.is_file()
 
 
+def test_i18n_dir_contains_compiled_file():
+    compiled = i18n.i18n_dir() / "stem_separator_fr.qm"
+    assert compiled.is_file()
+
+
 def test_install_translators_fr_then_en(app):
     assert i18n.install_translators(app, "fr") == "fr"
     assert i18n.install_translators(app, "en") == "en"
+
+
+def test_french_translation_is_actually_loaded(app):
+    assert i18n.install_translators(app, "fr") == "fr"
+    assert QCoreApplication.translate("TestContext", "Separate") == "Séparer"
+
+
+def test_english_restores_source_string(app):
+    i18n.install_translators(app, "fr")
+    i18n.install_translators(app, "en")
+    assert QCoreApplication.translate("TestContext", "Separate") == "Separate"
