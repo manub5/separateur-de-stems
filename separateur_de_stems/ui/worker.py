@@ -53,8 +53,9 @@ class SeparationWorker(QThread):
         self._output_dir = output_dir
         self._model_dir = model_dir
         self._separator_factory = separator_factory
+        self._owns_progress_queue = progress_queue is None
         self._progress_queue = (
-            progress_queue if progress_queue is not None else _create_progress_queue()
+            _create_progress_queue() if self._owns_progress_queue else progress_queue
         )
 
         self._cancel_requested = threading.Event()
@@ -75,11 +76,29 @@ class SeparationWorker(QThread):
                     pass
 
     def run(self) -> None:
-        """Thread body: never lets an exception escape the thread."""
+        """Thread body: normal errors become ``failed``, nothing escapes."""
         try:
             self._run_separation()
-        except BaseException as error:  # noqa: BLE001
+        except Exception as error:  # noqa: BLE001
             self.failed.emit(self._format_error(error))
+        finally:
+            self._close_owned_progress_queue()
+
+    def _close_owned_progress_queue(self) -> None:
+        """Best-effort close of a queue this worker created itself.
+
+        A caller-provided queue is never touched; a queue already closed by
+        the runner makes ``close()`` a harmless no-op inside the guard.
+        """
+        if not self._owns_progress_queue:
+            return
+        queue = self._progress_queue
+        if queue is None:
+            return
+        try:
+            queue.close()
+        except Exception:  # noqa: BLE001
+            pass
 
     def _run_separation(self) -> None:
         if self._cancel_requested.is_set():

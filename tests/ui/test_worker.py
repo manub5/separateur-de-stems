@@ -8,6 +8,7 @@ offscreen mode and signals are awaited with ``qtbot.waitSignal``.
 import threading
 import time
 
+from separateur_de_stems.ui import worker as worker_module
 from separateur_de_stems.ui.worker import SeparationWorker
 
 
@@ -207,3 +208,95 @@ def test_no_exception_escapes_run_when_start_raises(qtbot):
     with qtbot.waitSignal(worker.failed, timeout=3000) as signal:
         worker.start()
     assert "start exploded" in signal.args[0]
+
+
+class TrackingQueue:
+    """Stand-in for a multiprocessing queue recording close() calls."""
+
+    def __init__(self):
+        self.close_calls = 0
+
+    def close(self):
+        self.close_calls += 1
+
+
+def test_worker_closes_its_own_progress_queue(qtbot):
+    created = []
+
+    def make_queue():
+        queue = TrackingQueue()
+        created.append(queue)
+        return queue
+
+    original = worker_module._create_progress_queue
+    worker_module._create_progress_queue = make_queue
+    try:
+        factory = RetainedFactory(FakeSep)
+        worker = SeparationWorker(
+            "in.wav", {"vocals"}, "/out", "models", separator_factory=factory
+        )
+        with qtbot.waitSignal(worker.finished, timeout=3000):
+            worker.start()
+    finally:
+        worker_module._create_progress_queue = original
+    assert len(created) == 1
+    assert created[0].close_calls == 1
+
+
+def test_worker_leaves_caller_progress_queue_open(qtbot):
+    provided = TrackingQueue()
+    factory = RetainedFactory(FakeSep)
+    worker = SeparationWorker(
+        "in.wav",
+        {"vocals"},
+        "/out",
+        "models",
+        separator_factory=factory,
+        progress_queue=provided,
+    )
+    with qtbot.waitSignal(worker.finished, timeout=3000):
+        worker.start()
+    assert provided.close_calls == 0
+
+
+def test_runtime_error_becomes_failed(qtbot):
+    class RuntimeFailSep(FakeSep):
+        def start(self, input_path, stems, progress_cb=None):
+            raise RuntimeError("runtime exploded")
+
+    factory = RetainedFactory(RuntimeFailSep)
+    worker = SeparationWorker(
+        "in.wav", {"vocals"}, "/out", "models", separator_factory=factory
+    )
+    with qtbot.waitSignal(worker.failed, timeout=3000) as signal:
+        worker.start()
+    assert "runtime exploded" in signal.args[0]
+
+
+def test_system_exit_is_not_converted_to_failed(qtbot):
+    class SystemExitSep(FakeSep):
+        def start(self, input_path, stems, progress_cb=None):
+            raise SystemExit(3)
+
+    factory = RetainedFactory(SystemExitSep)
+    worker = SeparationWorker(
+        "in.wav", {"vocals"}, "/out", "models", separator_factory=factory
+    )
+    failed = []
+    worker.failed.connect(failed.append)
+
+    escaped = []
+
+    def invoke():
+        try:
+            worker.run()
+        except SystemExit as error:
+            escaped.append(error.code)
+
+    runner = threading.Thread(target=invoke)
+    runner.start()
+    runner.join(timeout=3)
+
+    assert runner.is_alive() is False
+    assert escaped == [3]
+    assert failed == []
