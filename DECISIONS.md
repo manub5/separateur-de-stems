@@ -58,3 +58,29 @@ potentiellement non inscriptible : les modèles et le cache vont alors sous
 `MusicLocation` (repli `DocumentsLocation`, puis `Path.home()`). Le ffmpeg
 embarqué est cherché sous `sys._MEIPASS/ffmpeg`. Les branches « frozen » ne sont
 testables que par mocks sous Linux, à revérifier sur le bundle macOS.
+
+## D-009 — Worker QThread pilote `SubprocessSeparator`
+
+Raison : `audio-separator` n'expose aucun callback de progression ni point
+d'interruption (cf. D-004). `SeparationWorker` (sous-classe `QThread`) pilote
+donc un `SubprocessSeparator` : il lance le sous-processus, le sonde par
+`poll(timeout)` en boucle, remonte la progression par une queue `spawn`, et
+traduit l'état final en signaux Qt (`progress`, `finished`, `failed`,
+`cancelled`). L'annulation passe par `request_cancel()`, qui positionne un
+`threading.Event` et appelle `cancel()` sur le sous-processus, tuable à tout
+moment. La logique de séparation reste dans le cœur : le worker ne fait que
+transporter signaux et statut, et l'interface ne gèle jamais.
+
+## D-010 — Tests UI headless via pytest-qt + `QT_QPA_PLATFORM=offscreen`
+
+Raison : l'interface doit être testable sans écran, notamment en CI Linux.
+`pytest-qt` fournit `qtbot` (ajout/enlèvement des widgets, `waitSignal`) et le
+plateforme Qt `offscreen` évite tout serveur X. Les tests injectent une fausse
+usine de worker et/ou mockent `SubprocessSeparator`, donc aucune inférence,
+aucun sous-processus réel et aucun accès réseau ne se produisent. Les
+`Settings` sont instanciés avec une paire organisation/application isolée
+(`TestOrg`/`TestApp`) puis `clear()` pour ne jamais toucher la configuration
+réelle de l'utilisateur. Le test de fumée ne lance jamais la boucle
+d'événements partagée : `QApplication.exec` est remplacé par un stub, car
+appeler `quit()` sur l'instance partagée corromprait les `waitSignal` des tests
+suivants (pollution inter-tests observée puis corrigée).
