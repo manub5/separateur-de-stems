@@ -48,3 +48,13 @@ des chemins complets, alors que d'autres backends renvoient des chemins
 absolus. `SeparationEngine._collect` résout désormais toute sortie relative
 contre `output_dir` via `_resolve_output`, afin que le dict retourné contienne
 toujours des chemins exploitables (nécessaire pour l'E2E et la future UI).
+
+## D-008 — Chemins dev vs bundle via QStandardPaths
+
+Raison : en développement, `models/` et `.cache/` restent relatifs au projet.
+Dans un bundle PyInstaller, l'application est lancée depuis un dossier
+potentiellement non inscriptible : les modèles et le cache vont alors sous
+`AppDataLocation/StemSeparator`, et le dossier de sortie par défaut est
+`MusicLocation` (repli `DocumentsLocation`, puis `Path.home()`). Le ffmpeg
+embarqué est cherché sous `sys._MEIPASS/ffmpeg`. Les branches « frozen » ne sont
+testables que par mocks sous Linux, à revérifier sur le bundle macOS.
