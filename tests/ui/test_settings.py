@@ -52,3 +52,13 @@ def test_output_dir_roundtrip(settings):
 def test_explicitly_empty_stems_read_back_empty(settings):
     settings.default_stems = []
     assert settings.default_stems == []
+
+
+def test_sync_flushes_pending_values(settings, tmp_path):
+    settings.model_dir = str(tmp_path / "models")
+    settings.language = "fr"
+    settings.sync()
+
+    reopened = Settings(organization=ORG, application=APP)
+    assert reopened.model_dir == str(tmp_path / "models")
+    assert reopened.language == "fr"

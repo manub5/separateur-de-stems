@@ -119,6 +119,7 @@ class SettingsDialog(QDialog):
             QMessageBox.StandardButton.No,
         )
         return answer == QMessageBox.StandardButton.Yes
+
     def _purge_cache(self) -> str:
         """Delete the cache contents, never the root directory itself."""
         root = Path(self._cache_dir)
@@ -143,6 +144,7 @@ class SettingsDialog(QDialog):
     def accept(self) -> None:
         self._settings.model_dir = self.model_dir_edit.text().strip()
         self._settings.language = self.language_combo.currentData()
+        self._settings.sync()
         super().accept()
 
     def reject(self) -> None:

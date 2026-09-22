@@ -76,3 +76,7 @@ class Settings:
         """Remove every stored preference."""
         self._settings.clear()
         self._settings.sync()
+
+    def sync(self) -> None:
+        """Flush pending writes to the backing store immediately."""
+        self._settings.sync()
