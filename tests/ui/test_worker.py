@@ -5,12 +5,15 @@ no real separation, inference or network access ever happens. Qt runs in
 offscreen mode and signals are awaited with ``qtbot.waitSignal``.
 """
 
+import errno
+import os
 import threading
 import time
 from pathlib import Path
 
 import pytest
 
+from separateur_de_stems.core.errors import CancelledError
 from separateur_de_stems.ui import worker as worker_module
 from separateur_de_stems.ui.run_context import RunContext
 from separateur_de_stems.ui.worker import SeparationWorker
@@ -104,7 +107,7 @@ def _worker(factory, *, context=None, progress_queue=None):
     return SeparationWorker(
         context,
         separator_factory=factory,
-        finalize_outputs=lambda _context, outputs: list(outputs.values()),
+        finalize_outputs=lambda _context, outputs, **kwargs: list(outputs.values()),
         progress_queue=progress_queue,
     )
 
@@ -338,6 +341,10 @@ def _writing_exporter(src, dest):
     return dest
 
 
+def _cancellable_writing_exporter(src, dest, **kwargs):
+    return _writing_exporter(src, dest)
+
+
 def test_partial_result_publishes_no_deliverables(tmp_path):
     context = _run_context(tmp_path)
     raw = Path(context.workspace) / "vocals.wav"
@@ -348,7 +355,7 @@ def test_partial_result_publishes_no_deliverables(tmp_path):
             context,
             {"vocals": str(raw)},
             wav_exporter=_writing_exporter,
-            mp3_exporter=_writing_exporter,
+            mp3_exporter=_cancellable_writing_exporter,
         )
 
     assert list(Path(context.output_dir).glob("song/*")) == []
@@ -364,7 +371,7 @@ def test_export_failure_publishes_no_partial_deliverables(tmp_path):
 
     calls = 0
 
-    def fail_second_mp3(src, dest):
+    def fail_second_mp3(src, dest, **kwargs):
         nonlocal calls
         calls += 1
         if calls == 2:
@@ -396,10 +403,35 @@ def test_existing_song_directory_is_preserved_without_overwrite(tmp_path):
             context,
             {"vocals": str(raw)},
             wav_exporter=_writing_exporter,
-            mp3_exporter=_writing_exporter,
+            mp3_exporter=_cancellable_writing_exporter,
         )
 
     assert existing.read_bytes() == b"keep"
+
+
+@pytest.mark.parametrize("destination_kind", ["file", "empty_directory"])
+def test_existing_destination_path_is_never_replaced(tmp_path, destination_kind):
+    context = _run_context(tmp_path, frozenset({"vocals"}))
+    destination = Path(context.output_dir) / "song"
+    if destination_kind == "file":
+        destination.write_bytes(b"keep")
+    else:
+        destination.mkdir()
+    raw = Path(context.workspace) / "vocals.wav"
+    raw.write_bytes(b"new")
+
+    with pytest.raises(FileExistsError):
+        worker_module._finalize_outputs(
+            context,
+            {"vocals": str(raw)},
+            wav_exporter=_writing_exporter,
+            mp3_exporter=_cancellable_writing_exporter,
+        )
+
+    if destination_kind == "file":
+        assert destination.read_bytes() == b"keep"
+    else:
+        assert list(destination.iterdir()) == []
 
 
 def test_finalization_runs_in_worker_thread(qtbot, tmp_path):
@@ -407,7 +439,7 @@ def test_finalization_runs_in_worker_thread(qtbot, tmp_path):
     factory = RetainedFactory(FakeSep)
     thread_ids = []
 
-    def finalize(run_context, outputs):
+    def finalize(run_context, outputs, **kwargs):
         thread_ids.append(threading.get_ident())
         return [str(Path(run_context.output_dir) / "song" / "song_vocals.wav")]
 
@@ -421,3 +453,110 @@ def test_finalization_runs_in_worker_thread(qtbot, tmp_path):
 
     assert thread_ids
     assert thread_ids != [gui_thread]
+
+
+@pytest.mark.parametrize("conflict_kind", ["file", "directory"])
+def test_publication_does_not_replace_destination_created_during_publish(
+    tmp_path, monkeypatch, conflict_kind
+):
+    context = _run_context(tmp_path, frozenset({"vocals"}))
+    raw = Path(context.workspace) / "vocals.wav"
+    raw.write_bytes(b"new")
+    final_dir = Path(context.output_dir) / "song"
+    original_link = os.link
+
+    def racing_link(source, destination):
+        destination = Path(destination)
+        if conflict_kind == "file":
+            destination.write_bytes(b"preexisting")
+        else:
+            destination.mkdir()
+        return original_link(source, destination)
+
+    monkeypatch.setattr(os, "link", racing_link)
+
+    with pytest.raises(FileExistsError):
+        worker_module._finalize_outputs(
+            context,
+            {"vocals": str(raw)},
+            wav_exporter=_writing_exporter,
+            mp3_exporter=_cancellable_writing_exporter,
+        )
+
+    conflict = final_dir / "song_vocals.wav"
+    assert conflict.exists()
+    if conflict_kind == "file":
+        assert conflict.read_bytes() == b"preexisting"
+
+
+def test_publication_failure_rolls_back_only_files_linked_by_run(tmp_path, monkeypatch):
+    context = _run_context(tmp_path, frozenset({"vocals"}))
+    raw = Path(context.workspace) / "vocals.wav"
+    raw.write_bytes(b"new")
+    original_link = os.link
+    calls = 0
+
+    def fail_second_link(source, destination):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError(errno.EXDEV, "cross-device link")
+        return original_link(source, destination)
+
+    monkeypatch.setattr(os, "link", fail_second_link)
+
+    with pytest.raises(OSError, match="cross-device"):
+        worker_module._finalize_outputs(
+            context,
+            {"vocals": str(raw)},
+            wav_exporter=_writing_exporter,
+            mp3_exporter=_cancellable_writing_exporter,
+        )
+
+    assert (Path(context.output_dir) / "song").exists() is False
+
+
+def test_cancel_during_slow_export_emits_only_cancelled_and_publishes_nothing(
+    qtbot, tmp_path
+):
+    context = _run_context(tmp_path, frozenset({"vocals"}))
+    raw = Path(context.workspace) / "vocals.wav"
+    raw.write_bytes(b"raw")
+    factory = RetainedFactory(
+        lambda: FakeSep(outcome=("ok", {"vocals": str(raw)}), terminal_after_polls=1)
+    )
+    entered = threading.Event()
+
+    def slow_mp3(src, dest, cancel_requested=None):
+        entered.set()
+        while not cancel_requested():
+            time.sleep(0.01)
+        raise CancelledError("cancelled")
+
+    def finalize(run_context, outputs, cancel_requested=None):
+        return worker_module._finalize_outputs(
+            run_context,
+            outputs,
+            wav_exporter=_writing_exporter,
+            mp3_exporter=slow_mp3,
+            cancel_requested=cancel_requested,
+        )
+
+    worker = SeparationWorker(
+        context, separator_factory=factory, finalize_outputs=finalize
+    )
+    completed = []
+    failed = []
+    worker.completed.connect(completed.append)
+    worker.failed.connect(failed.append)
+    worker.start()
+    assert entered.wait(timeout=2)
+
+    started = time.monotonic()
+    with qtbot.waitSignal(worker.cancelled, timeout=1000):
+        worker.request_cancel()
+
+    assert time.monotonic() - started < 0.5
+    assert completed == []
+    assert failed == []
+    assert (Path(context.output_dir) / "song").exists() is False

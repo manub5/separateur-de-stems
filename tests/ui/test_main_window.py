@@ -7,15 +7,19 @@ user configuration is never touched.
 """
 
 import os
+import threading
+import time
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QObject, Signal
 
+from separateur_de_stems.core.errors import CancelledError
 from separateur_de_stems.ui.main_window import MainWindow
 from separateur_de_stems.ui.run_context import RunContext
 from separateur_de_stems.ui.settings import Settings
+from separateur_de_stems.ui.worker import SeparationWorker
 
 ORG = "TestOrg"
 APP = "TestApp"
@@ -318,6 +322,57 @@ def test_active_close_is_deferred_until_native_thread_finish(
     fake_factory.created[0].cancelled.emit()
     fake_factory.created[0].finished.emit()
     qtbot.waitUntil(lambda: not window.isVisible())
+
+
+def test_close_during_export_cancels_and_cleans_without_publication(
+    qtbot, settings, tmp_path
+):
+    entered = threading.Event()
+    created = []
+
+    class ImmediateSeparator:
+        def start(self, input_path, stems):
+            pass
+
+        def poll(self, timeout=0):
+            return "ok", {"vocals": str(tmp_path / "raw.wav")}
+
+        def poll_progress(self):
+            return []
+
+    def slow_finalize(context, outputs, cancel_requested=None):
+        entered.set()
+        while not cancel_requested():
+            time.sleep(0.01)
+        raise CancelledError("cancelled")
+
+    def worker_factory(context):
+        worker = SeparationWorker(
+            context,
+            separator_factory=lambda **kwargs: ImmediateSeparator(),
+            finalize_outputs=slow_finalize,
+        )
+        created.append(worker)
+        return worker
+
+    audio = tmp_path / "song.wav"
+    audio.write_bytes(b"audio")
+    (tmp_path / "raw.wav").write_bytes(b"raw")
+    window = _make_window(qtbot, settings, worker_factory=worker_factory)
+    window.open_file(str(audio))
+    output = tmp_path / "out"
+    window.output_edit.setText(str(output))
+    window.show()
+    window.start_separation()
+    workspace = Path(window._run_context.workspace)
+    assert entered.wait(timeout=2)
+
+    window.close()
+
+    qtbot.waitUntil(lambda: not window.isVisible(), timeout=2000)
+    assert created
+    assert workspace.exists() is False
+    assert (output / "song").exists() is False
 
 
 def test_immediate_relaunch_is_blocked_until_native_thread_finish(

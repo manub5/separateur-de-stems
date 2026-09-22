@@ -12,6 +12,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 
+from separateur_de_stems.core.errors import CancelledError
 from separateur_de_stems.core.export import to_mp3_320, to_wav24
 from separateur_de_stems.core.naming import sanitize, stem_filename
 from separateur_de_stems.core.process import SubprocessSeparator
@@ -27,6 +28,7 @@ def _finalize_outputs(
     outputs: dict,
     wav_exporter=to_wav24,
     mp3_exporter=to_mp3_320,
+    cancel_requested=lambda: False,
 ) -> list[str]:
     """Stage every deliverable, then atomically publish the complete song."""
     if not outputs:
@@ -48,24 +50,58 @@ def _finalize_outputs(
     staged_song_dir = Path(context.workspace) / "deliverables" / song
     exported: list[Path] = []
     for stem in sorted(context.stems):
+        _raise_if_cancelled(cancel_requested)
         wav_path = Path(
             stem_filename(context.input_path, stem, "wav", str(staged_song_dir))
         )
         wav_exporter(str(sources[stem]), str(wav_path))
+        _raise_if_cancelled(cancel_requested)
         exported.append(wav_path)
         mp3_path = Path(
             stem_filename(context.input_path, stem, "mp3", str(staged_song_dir))
         )
-        mp3_exporter(str(wav_path), str(mp3_path))
+        mp3_exporter(
+            str(wav_path),
+            str(mp3_path),
+            cancel_requested=cancel_requested,
+        )
+        _raise_if_cancelled(cancel_requested)
         exported.append(mp3_path)
 
     missing_deliverables = [path for path in exported if not path.is_file()]
     if missing_deliverables:
         raise RuntimeError(f"Export did not create: {missing_deliverables[0]}")
-    if os.path.lexists(final_song_dir):
-        raise FileExistsError(f"Output already exists: {final_song_dir}")
-    staged_song_dir.rename(final_song_dir)
+    _raise_if_cancelled(cancel_requested)
+    try:
+        final_song_dir.mkdir()
+    except FileExistsError:
+        raise FileExistsError(f"Output already exists: {final_song_dir}") from None
+
+    published: list[Path] = []
+    try:
+        for staged_path in exported:
+            _raise_if_cancelled(cancel_requested)
+            destination = final_song_dir / staged_path.name
+            os.link(staged_path, destination)
+            published.append(destination)
+        _raise_if_cancelled(cancel_requested)
+    except BaseException:
+        for path in reversed(published):
+            try:
+                path.unlink()
+            except OSError:
+                pass
+        try:
+            final_song_dir.rmdir()
+        except OSError:
+            pass
+        raise
     return [str(final_song_dir / path.name) for path in exported]
+
+
+def _raise_if_cancelled(cancel_requested) -> None:
+    if cancel_requested():
+        raise CancelledError("Export cancelled")
 
 
 def _create_progress_queue():
@@ -116,6 +152,8 @@ class SeparationWorker(QThread):
         """Thread body: normal errors become ``failed``, nothing escapes."""
         try:
             self._run_separation()
+        except CancelledError:
+            self.cancelled.emit()
         except Exception as error:  # noqa: BLE001
             self.failed.emit(self._format_error(error))
         finally:
@@ -161,9 +199,13 @@ class SeparationWorker(QThread):
             elif status == "error":
                 self.failed.emit(str(payload))
             else:
+                _raise_if_cancelled(self._cancel_requested.is_set)
                 exported = self._finalize_outputs(
-                    self._context, dict(payload or {})
+                    self._context,
+                    dict(payload or {}),
+                    cancel_requested=self._cancel_requested.is_set,
                 )
+                _raise_if_cancelled(self._cancel_requested.is_set)
                 self.completed.emit(exported)
             return
 

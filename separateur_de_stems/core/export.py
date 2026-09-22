@@ -1,11 +1,12 @@
 """Audio export helpers: 24-bit WAV rewriting and 320 kb/s MP3 encoding."""
 
 import subprocess
+import time
 from pathlib import Path
 
 import soundfile as sf
 
-from separateur_de_stems.core.errors import OutputError
+from separateur_de_stems.core.errors import CancelledError, OutputError
 from separateur_de_stems.core.platform import ffmpeg_executable
 
 _MP3_BITRATE = "320k"
@@ -47,7 +48,7 @@ def to_wav24(src: str, dest: str) -> str:
     return dest
 
 
-def to_mp3_320(src: str, dest: str) -> str:
+def to_mp3_320(src: str, dest: str, cancel_requested=None) -> str:
     _ensure_parent(dest)
     target = Path(dest)
     preexisting = target.exists()
@@ -64,7 +65,13 @@ def to_mp3_320(src: str, dest: str) -> str:
     ]
 
     try:
-        subprocess.run(args, capture_output=True, check=True)
+        if cancel_requested is None:
+            subprocess.run(args, capture_output=True, check=True)
+        else:
+            _run_cancellable(args, cancel_requested)
+    except CancelledError:
+        _cleanup_partial(target, preexisting)
+        raise
     except Exception as error:  # noqa: BLE001
         _cleanup_partial(target, preexisting)
         detail = ""
@@ -75,3 +82,26 @@ def to_mp3_320(src: str, dest: str) -> str:
             detail = f": {stderr[-_STDERR_TAIL:]}"
         raise OutputError(f"Failed to encode MP3 {dest}{detail}") from error
     return dest
+
+
+def _run_cancellable(args: list[str], cancel_requested) -> None:
+    process = subprocess.Popen(
+        args,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    while process.poll() is None:
+        if cancel_requested():
+            process.terminate()
+            try:
+                process.communicate(timeout=0.5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.communicate()
+            raise CancelledError("MP3 encoding cancelled")
+        time.sleep(0.05)
+    _, stderr = process.communicate()
+    if process.returncode:
+        raise subprocess.CalledProcessError(
+            process.returncode, args, stderr=stderr
+        )

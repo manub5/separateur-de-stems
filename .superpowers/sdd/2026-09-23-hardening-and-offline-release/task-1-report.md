@@ -64,3 +64,33 @@ QT_QPA_PLATFORM=offscreen ../../.venv/bin/python -m pytest tests/ui -q
 git diff --check
 exit 0
 ```
+
+## Review Fix Round 2
+
+- Publication now creates the destination directory atomically and publishes each staged file with `os.link`, which cannot replace an existing file.
+- A destination file or directory that wins a race is preserved. Files linked by the current run are tracked and rolled back if any later link, cancellation, or cross-device operation fails.
+- Export cancellation is checked before and after every WAV/MP3 conversion and before every publication operation.
+- Cancellable MP3 export uses `subprocess.Popen` polling, terminates ffmpeg on cancellation, escalates to `kill()` after a timeout, and removes its partial output.
+- `CancelledError` follows only the worker's `cancelled` terminal path; it does not also emit failure or completion.
+- Active close during a controlled slow export requests cancellation, waits for native thread completion, removes the workspace, and publishes nothing.
+
+TDD red verification reproduced all five initially missing behaviours: cancellable MP3, file and directory publication races, cross-device rollback, and cancellation during slow export. Focused green verification:
+
+```text
+QT_QPA_PLATFORM=offscreen ../../.venv/bin/python -m pytest \
+  tests/core/test_export.py::test_to_mp3_320_terminates_process_when_cancelled \
+  tests/ui/test_worker.py::test_publication_does_not_replace_destination_created_during_publish \
+  tests/ui/test_worker.py::test_publication_failure_rolls_back_only_files_linked_by_run \
+  tests/ui/test_worker.py::test_cancel_during_slow_export_emits_only_cancelled_and_publishes_nothing -q
+5 passed in 0.10s
+```
+
+Pre-commit suite runs before the round 2 commit:
+
+```text
+QT_QPA_PLATFORM=offscreen ../../.venv/bin/python -m pytest tests/ui -q
+140 passed in 2.61s
+
+../../.venv/bin/python -m pytest tests/core/test_export.py -q
+18 passed in 0.24s
+```

@@ -1,11 +1,12 @@
 import subprocess
+import threading
 from pathlib import Path
 
 import numpy as np
 import pytest
 import soundfile as sf
 
-from separateur_de_stems.core.errors import OutputError
+from separateur_de_stems.core.errors import CancelledError, OutputError
 from separateur_de_stems.core.export import to_mp3_320, to_wav24
 
 SAMPLE_RATE = 8000
@@ -241,3 +242,36 @@ def test_to_mp3_320_preserves_cause(tmp_path, monkeypatch):
         to_mp3_320(str(source), str(dest))
 
     assert exc_info.value.__cause__ is original
+
+
+def test_to_mp3_320_terminates_process_when_cancelled(tmp_path, monkeypatch):
+    source, _ = write_source(tmp_path)
+    dest = tmp_path / "stem.mp3"
+    cancelled = threading.Event()
+
+    class SlowProcess:
+        returncode = None
+
+        def __init__(self):
+            self.terminated = False
+
+        def poll(self):
+            if not self.terminated:
+                cancelled.set()
+                return None
+            return -15
+
+        def terminate(self):
+            self.terminated = True
+
+        def communicate(self, timeout=None):
+            return b"", b""
+
+    process = SlowProcess()
+    monkeypatch.setattr(subprocess, "Popen", lambda *args, **kwargs: process)
+
+    with pytest.raises(CancelledError):
+        to_mp3_320(str(source), str(dest), cancel_requested=cancelled.is_set)
+
+    assert process.terminated is True
+    assert dest.exists() is False
