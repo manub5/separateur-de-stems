@@ -6,10 +6,11 @@ requires-python = ">=3.12"
 dependencies = [
     "audio-separator",
     "soundfile",
+    "PySide6",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "pytest-qt"]
 
 [project.scripts]
 separateur-de-stems = "separateur_de_stems.cli:main"

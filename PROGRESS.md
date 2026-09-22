@@ -8,6 +8,7 @@
 ## En cours
 
 - Phase 1 (CLI).
+- Phase 2 (UI) — Plan A en cours.
 
 ## Bloqué
 
