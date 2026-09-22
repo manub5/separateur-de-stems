@@ -35,6 +35,7 @@ from separateur_de_stems.core.naming import sanitize, stem_filename
 from separateur_de_stems.ui.drop_zone import DropZone
 from separateur_de_stems.ui.paths import default_model_dir, default_output_dir
 from separateur_de_stems.ui.settings import Settings
+from separateur_de_stems.ui.settings_dialog import SettingsDialog
 from separateur_de_stems.ui.worker import SeparationWorker
 
 __all__ = ["MainWindow"]
@@ -239,7 +240,13 @@ class MainWindow(QMainWindow):
         self._log(self.tr("Cancelled"))
 
     def open_settings(self) -> None:
-        """Placeholder until the settings dialog lands in Task 8."""
+        """Open the settings dialog and persist accepted values.
+
+        Applying the language itself is deferred to Plan B; the value is
+        already persisted by the dialog so the choice survives a restart.
+        """
+        dialog = SettingsDialog(self._settings, parent=self)
+        dialog.exec()
 
     # -- export -----------------------------------------------------------
 
