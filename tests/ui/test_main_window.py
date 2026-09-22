@@ -241,3 +241,98 @@ def test_on_cancelled_resets(qtbot, settings, tmp_path, fake_factory):
     window.on_cancelled()
     assert window.separate_button.text() == window.tr("Separate")
     assert window.tr("Cancelled") in window.log_view.toPlainText()
+
+
+def test_remove_intermediates_is_bounded_to_output_dir(
+    qtbot, settings, tmp_path, monkeypatch
+):
+    """An intermediate is only removed when it lives under the output folder."""
+    monkeypatch.setattr(main_window_module, "to_wav24", lambda src, dest: dest)
+    monkeypatch.setattr(main_window_module, "to_mp3_320", lambda src, dest: dest)
+
+    window = _make_window(qtbot, settings)
+    audio = tmp_path / "song.wav"
+    audio.write_bytes(b"")
+    window.open_file(str(audio))
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    window.output_edit.setText(str(output_dir))
+
+    inside = output_dir / "raw_vocals.wav"
+    inside.write_bytes(b"")
+    outside = tmp_path / "raw_instrumental.wav"
+    outside.write_bytes(b"")
+
+    window.on_finished(
+        {"vocals": str(inside), "instrumental": str(outside)}
+    )
+
+    assert inside.exists() is False
+    assert outside.exists() is True
+
+
+def test_on_cancelled_removes_only_run_partials(
+    qtbot, settings, tmp_path, fake_factory
+):
+    """Cancelling deletes files created during the run, never pre-existing ones."""
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    preexisting = output_dir / "previous_song.wav"
+    preexisting.write_bytes(b"keep me")
+
+    window = _make_window(qtbot, settings, worker_factory=fake_factory)
+    audio = tmp_path / "song.wav"
+    audio.write_bytes(b"")
+    window.open_file(str(audio))
+    window.output_edit.setText(str(output_dir))
+    window.start_separation()
+
+    partial = output_dir / "song_vocals.part.wav"
+    partial.write_bytes(b"half written")
+
+    window.on_cancelled()
+
+    assert partial.exists() is False
+    assert preexisting.read_bytes() == b"keep me"
+
+    window.on_cancelled()
+    assert preexisting.read_bytes() == b"keep me"
+
+
+def test_on_finished_exports_only_requested_stems(
+    qtbot, settings, tmp_path, fake_factory, monkeypatch
+):
+    """Only the stems requested at launch are exported, not every output key."""
+    wav_calls = []
+
+    def fake_wav24(src, dest):
+        wav_calls.append((src, dest))
+        return dest
+
+    monkeypatch.setattr(main_window_module, "to_wav24", fake_wav24)
+    monkeypatch.setattr(main_window_module, "to_mp3_320", lambda src, dest: dest)
+
+    window = _make_window(qtbot, settings, worker_factory=fake_factory)
+    audio = tmp_path / "song.wav"
+    audio.write_bytes(b"")
+    window.open_file(str(audio))
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    window.output_edit.setText(str(output_dir))
+
+    window.stem_checkboxes["instrumental"].setChecked(False)
+    window.start_separation()
+
+    vocals_src = output_dir / "raw_vocals.wav"
+    vocals_src.write_bytes(b"")
+    instrumental_src = output_dir / "raw_instrumental.wav"
+    instrumental_src.write_bytes(b"")
+
+    window.on_finished(
+        {"vocals": str(vocals_src), "instrumental": str(instrumental_src)}
+    )
+
+    exported_sources = {os.path.basename(src) for src, _ in wav_calls}
+    assert "raw_vocals.wav" in exported_sources
+    assert "raw_instrumental.wav" not in exported_sources
+    assert instrumental_src.exists() is True

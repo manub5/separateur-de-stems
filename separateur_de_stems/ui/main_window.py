@@ -52,6 +52,8 @@ class MainWindow(QMainWindow):
         self._worker = None
         self._input_path: str | None = None
         self._running = False
+        self._run_stems: set[str] | None = None
+        self._pre_run_files: set[str] | None = None
 
         self.setWindowTitle(self.tr("Stem Separator"))
         self._build_menu()
@@ -182,6 +184,9 @@ class MainWindow(QMainWindow):
 
         self._settings.output_dir = output_dir
 
+        self._run_stems = set(stems)
+        self._pre_run_files = self._snapshot_files(output_dir)
+
         worker = self._worker_factory(
             input_path, stems, output_dir, default_model_dir()
         )
@@ -228,6 +233,7 @@ class MainWindow(QMainWindow):
         self._log(self.tr("Error: {message}").format(message=message))
 
     def on_cancelled(self) -> None:
+        self._cleanup_run_partials()
         self._set_running_state(False)
         self.status_label.setText(self.tr("Cancelled"))
         self._log(self.tr("Cancelled"))
@@ -245,9 +251,15 @@ class MainWindow(QMainWindow):
         song = os.path.splitext(os.path.basename(input_path))[0]
         song_dir = os.path.join(output_dir, sanitize(song))
 
+        requested = (
+            self._run_stems
+            if self._run_stems is not None
+            else self.selected_stems()
+        )
+
         exported: list[str] = []
         intermediates: list[str] = []
-        for stem in sorted(outputs.keys()):
+        for stem in sorted(requested & outputs.keys()):
             source = outputs[stem]
             if not Path(source).is_file():
                 raise FileNotFoundError(source)
@@ -259,20 +271,71 @@ class MainWindow(QMainWindow):
             to_mp3_320(wav_path, mp3_path)
             exported.append(mp3_path)
 
-        self._remove_intermediates(intermediates, exported)
+        self._remove_intermediates(intermediates, exported, output_dir)
         return exported
 
     @staticmethod
-    def _remove_intermediates(intermediates: list[str], exported: list[str]) -> None:
+    def _remove_intermediates(
+        intermediates: list[str], exported: list[str], output_dir: str
+    ) -> None:
+        """Delete unexported intermediates that live under ``output_dir``.
+
+        A file outside the output folder is never touched, so a caller-chosen
+        engine output location or a user file is preserved.
+        """
         protected = {str(Path(path).resolve()) for path in exported}
+        try:
+            root = Path(output_dir).resolve()
+        except OSError:
+            return
         for path in intermediates:
             try:
                 link = Path(path)
-                if str(link.resolve()) in protected:
+                resolved = link.resolve()
+                if resolved in protected:
+                    continue
+                if not resolved.is_relative_to(root):
                     continue
                 link.unlink()
             except OSError:
                 pass
+
+    def _cleanup_run_partials(self) -> None:
+        """Best-effort removal of files created by the current run.
+
+        Only files under the output folder that did not exist when the run
+        started are removed, so pre-existing user files are never deleted.
+        """
+        if self._pre_run_files is None:
+            return
+        output_dir = self.output_edit.text().strip()
+        if not output_dir:
+            return
+        for path in self._snapshot_files(output_dir) - self._pre_run_files:
+            try:
+                Path(path).unlink()
+            except OSError:
+                pass
+        self._pre_run_files = None
+
+    @staticmethod
+    def _snapshot_files(output_dir: str) -> set[str]:
+        """Absolute paths of every file currently under ``output_dir``.
+
+        Symlinks are recorded as links (not resolved) so a later cleanup
+        unlinks the link itself and never its target.
+        """
+        root = Path(output_dir)
+        if not root.is_dir():
+            return set()
+        files: set[str] = set()
+        try:
+            for candidate in root.rglob("*"):
+                if candidate.is_file():
+                    files.add(str(candidate.absolute()))
+        except OSError:
+            return files
+        return files
 
     # -- helpers ----------------------------------------------------------
 
