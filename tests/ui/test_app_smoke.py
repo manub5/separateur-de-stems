@@ -27,6 +27,15 @@ def settings():
     store.clear()
 
 
+@pytest.fixture(autouse=True)
+def restore_translators():
+    """Reset the module-level translator after each test."""
+    yield
+    app = QApplication.instance()
+    if app is not None:
+        app_module.i18n.install_translators(app, "en")
+
+
 def test_main_window_constructs_with_isolated_settings(qtbot, settings):
     window = MainWindow(settings=settings)
     qtbot.addWidget(window)
@@ -67,6 +76,46 @@ def test_main_does_not_block(qtbot, settings, monkeypatch):
     exit_code = app_module.main([])
 
     assert exit_code == 0
+
+
+def test_main_installs_translators_with_settings_language(
+    qtbot, settings, monkeypatch
+):
+    """``main`` installs the translator for the language stored in Settings."""
+    settings.language = "fr"
+    calls = []
+
+    def spy(app, setting):
+        calls.append(setting)
+        return "fr"
+
+    monkeypatch.setattr(app_module, "Settings", lambda: settings)
+    monkeypatch.setattr(app_module.i18n, "install_translators", spy)
+    monkeypatch.setattr(QApplication, "exec", lambda self: 0)
+
+    exit_code = app_module.main([])
+
+    assert exit_code == 0
+    assert calls == ["fr"]
+
+
+def test_main_does_not_crash_with_unknown_language(qtbot, settings, monkeypatch):
+    """An unknown stored language falls back safely at startup."""
+    settings.language = "de"
+    calls = []
+
+    def spy(app, setting):
+        calls.append(setting)
+        return "en"
+
+    monkeypatch.setattr(app_module, "Settings", lambda: settings)
+    monkeypatch.setattr(app_module.i18n, "install_translators", spy)
+    monkeypatch.setattr(QApplication, "exec", lambda self: 0)
+
+    exit_code = app_module.main([])
+
+    assert exit_code == 0
+    assert calls == ["de"]
 
 
 def test_main_help_exits_zero_without_crash(capsys):

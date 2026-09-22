@@ -5,6 +5,7 @@ import sys
 
 from PySide6.QtWidgets import QApplication
 
+from separateur_de_stems.ui import i18n
 from separateur_de_stems.ui.main_window import MainWindow
 from separateur_de_stems.ui.settings import Settings
 
@@ -29,6 +30,7 @@ def main(argv: list[str] | None = None) -> int:
 
     app = QApplication.instance() or QApplication(sys.argv[:1])
     settings = Settings()
+    i18n.install_translators(app, settings.language)
     window = MainWindow(settings=settings)
     window.show()
 
