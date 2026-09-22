@@ -6,12 +6,12 @@
     <message>
         <location filename="../drop_zone.py" line="55"/>
         <source>Selected file: {name}</source>
-        <translation type="unfinished"></translation>
+        <translation>Fichier sélectionné : {name}</translation>
     </message>
     <message>
         <location filename="../drop_zone.py" line="76"/>
         <source>Unsupported drop</source>
-        <translation type="unfinished"></translation>
+        <translation>Dépôt non pris en charge</translation>
     </message>
 </context>
 <context>
@@ -20,82 +20,82 @@
         <location filename="../main_window.py" line="60"/>
         <location filename="../main_window.py" line="397"/>
         <source>Stem Separator</source>
-        <translation type="unfinished"></translation>
+        <translation>Séparateur de pistes</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="69"/>
         <source>File</source>
-        <translation type="unfinished"></translation>
+        <translation>Fichier</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="71"/>
         <location filename="../main_window.py" line="96"/>
         <source>Open…</source>
-        <translation type="unfinished"></translation>
+        <translation>Ouvrir…</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="75"/>
         <source>Quit</source>
-        <translation type="unfinished"></translation>
+        <translation>Quitter</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="79"/>
         <source>Edit</source>
-        <translation type="unfinished"></translation>
+        <translation>Édition</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="80"/>
         <source>Settings…</source>
-        <translation type="unfinished"></translation>
+        <translation>Réglages…</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="83"/>
         <source>Help</source>
-        <translation type="unfinished"></translation>
+        <translation>Aide</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="84"/>
         <location filename="../main_window.py" line="396"/>
         <source>About</source>
-        <translation type="unfinished"></translation>
+        <translation>À propos</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="100"/>
         <source>Stems to extract</source>
-        <translation type="unfinished"></translation>
+        <translation>Pistes à extraire</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="112"/>
         <source>Output folder</source>
-        <translation type="unfinished"></translation>
+        <translation>Dossier de sortie</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="120"/>
         <source>Choose…</source>
-        <translation type="unfinished"></translation>
+        <translation>Choisir…</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="125"/>
         <location filename="../main_window.py" line="428"/>
         <location filename="../main_window.py" line="434"/>
         <source>Separate</source>
-        <translation type="unfinished">Séparer</translation>
+        <translation>Séparer</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="157"/>
         <location filename="../main_window.py" line="389"/>
         <source>Unsupported file: {name}</source>
-        <translation type="unfinished"></translation>
+        <translation>Fichier non pris en charge : {name}</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="163"/>
         <source>Selected file: {name}</source>
-        <translation type="unfinished"></translation>
+        <translation>Fichier sélectionné : {name}</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="202"/>
         <source>Starting separation…</source>
-        <translation type="unfinished"></translation>
+        <translation>Démarrage de la séparation…</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="235"/>
@@ -105,78 +105,78 @@
     <message>
         <location filename="../main_window.py" line="244"/>
         <source>Failed</source>
-        <translation type="unfinished"></translation>
+        <translation>Échec</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="245"/>
         <source>Error: {message}</source>
-        <translation type="unfinished"></translation>
+        <translation>Erreur : {message}</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="250"/>
         <location filename="../main_window.py" line="251"/>
         <source>Cancelled</source>
-        <translation type="unfinished"></translation>
+        <translation>Annulé</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="373"/>
         <source>Open audio file</source>
-        <translation type="unfinished"></translation>
+        <translation>Ouvrir un fichier audio</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="375"/>
         <source>Audio files (*.wav *.flac *.mp3 *.aif *.aiff *.m4a)</source>
-        <translation type="unfinished"></translation>
+        <translation>Fichiers audio (*.wav *.flac *.mp3 *.aif *.aiff *.m4a)</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="383"/>
         <source>Choose output folder</source>
-        <translation type="unfinished"></translation>
+        <translation>Choisir le dossier de sortie</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="405"/>
         <source>Open output folder?</source>
-        <translation type="unfinished"></translation>
+        <translation>Ouvrir le dossier de sortie ?</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="406"/>
         <source>Open the output folder?</source>
-        <translation type="unfinished"></translation>
+        <translation>Ouvrir le dossier de sortie ?</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="434"/>
         <source>Cancel</source>
-        <translation type="unfinished"></translation>
+        <translation>Annuler</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="466"/>
         <source>Vocals</source>
-        <translation type="unfinished"></translation>
+        <translation>Voix</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="467"/>
         <source>Instrumental</source>
-        <translation type="unfinished"></translation>
+        <translation>Instrumental</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="468"/>
         <source>Drums</source>
-        <translation type="unfinished"></translation>
+        <translation>Batterie</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="469"/>
         <source>Bass</source>
-        <translation type="unfinished"></translation>
+        <translation>Basse</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="470"/>
         <source>Guitar</source>
-        <translation type="unfinished"></translation>
+        <translation>Guitare</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="471"/>
         <source>Piano</source>
-        <translation type="unfinished"></translation>
+        <translation>Piano</translation>
     </message>
 </context>
 <context>
@@ -184,49 +184,49 @@
     <message>
         <location filename="../settings_dialog.py" line="53"/>
         <source>Settings</source>
-        <translation type="unfinished"></translation>
+        <translation>Réglages</translation>
     </message>
     <message>
         <location filename="../settings_dialog.py" line="56"/>
         <source>Browse…</source>
-        <translation type="unfinished"></translation>
+        <translation>Parcourir…</translation>
     </message>
     <message>
         <location filename="../settings_dialog.py" line="67"/>
         <location filename="../settings_dialog.py" line="116"/>
         <source>Clear cache</source>
-        <translation type="unfinished"></translation>
+        <translation>Vider le cache</translation>
     </message>
     <message>
         <location filename="../settings_dialog.py" line="71"/>
         <source>Model folder</source>
-        <translation type="unfinished"></translation>
+        <translation>Dossier des modèles</translation>
     </message>
     <message>
         <location filename="../settings_dialog.py" line="72"/>
         <source>Language</source>
-        <translation type="unfinished"></translation>
+        <translation>Langue</translation>
     </message>
     <message>
         <location filename="../settings_dialog.py" line="103"/>
         <source>Choose model folder</source>
-        <translation type="unfinished"></translation>
+        <translation>Choisir le dossier des modèles</translation>
     </message>
     <message>
         <location filename="../settings_dialog.py" line="117"/>
         <source>Delete every cached model file?</source>
-        <translation type="unfinished"></translation>
+        <translation>Supprimer tous les fichiers de modèles en cache ?</translation>
     </message>
     <message>
         <location filename="../settings_dialog.py" line="127"/>
         <location filename="../settings_dialog.py" line="139"/>
         <source>Nothing to clear</source>
-        <translation type="unfinished"></translation>
+        <translation>Rien à vider</translation>
     </message>
     <message>
         <location filename="../settings_dialog.py" line="140"/>
         <source>Cache cleared</source>
-        <translation type="unfinished"></translation>
+        <translation>Cache vidé</translation>
     </message>
 </context>
 </TS>
