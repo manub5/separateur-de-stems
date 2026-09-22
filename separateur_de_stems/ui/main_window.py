@@ -5,9 +5,8 @@ selection, the output directory picker, the progress/history widgets and the
 menu bar. Separation runs in a ``SeparationWorker`` thread; the window only
 bridges its signals to the widgets and never blocks the event loop.
 
-The window deliberately holds no separation logic: the worker returns the raw
-``{stem: path}`` mapping and this module groups the results into a per-song
-sub-directory, exporting a 24-bit WAV and a 320 kb/s MP3 for every stem.
+The window deliberately holds no separation or export logic: the worker stages
+and publishes complete deliverables before reporting their final paths.
 """
 
 import os
@@ -32,9 +31,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from separateur_de_stems.core.export import to_mp3_320, to_wav24
 from separateur_de_stems.core.models import is_supported_audio
-from separateur_de_stems.core.naming import sanitize, stem_filename
 from separateur_de_stems.ui import i18n
 from separateur_de_stems.ui.drop_zone import DropZone
 from separateur_de_stems.ui.paths import default_model_dir, default_output_dir
@@ -200,7 +197,7 @@ class MainWindow(QMainWindow):
 
         self._settings.output_dir = output_dir
 
-        workspace = tempfile.mkdtemp(prefix="stem-separator-")
+        workspace = tempfile.mkdtemp(prefix=".stem-separator-", dir=output_dir)
         self._run_context = RunContext(
             input_path=input_path,
             output_dir=output_dir,
@@ -210,23 +207,29 @@ class MainWindow(QMainWindow):
         )
         self._terminal_received = False
 
-        worker = self._worker_factory(
-            input_path, stems, workspace, model_dir
-        )
-        worker.progress.connect(self.on_progress)
-        worker.completed.connect(self.on_finished)
-        worker.failed.connect(self.on_failed)
-        worker.cancelled.connect(self.on_cancelled)
-        worker.finished.connect(self._on_thread_finished)
+        try:
+            worker = self._worker_factory(self._run_context)
+            worker.progress.connect(self.on_progress)
+            worker.completed.connect(self.on_finished)
+            worker.failed.connect(self.on_failed)
+            worker.cancelled.connect(self.on_cancelled)
+            worker.finished.connect(self._on_thread_finished)
 
-        self._worker = worker
-        self._set_running_state(True)
-        self._log(self.tr("Starting separation…"))
-        worker.start()
+            self._worker = worker
+            self._set_running_state(True)
+            self._log(self.tr("Starting separation…"))
+            worker.start()
+        except Exception as error:  # noqa: BLE001
+            if self._worker is not None:
+                self._worker.deleteLater()
+            self._cleanup_workspace()
+            self._worker = None
+            self._run_context = None
+            self._set_running_state(False)
+            self.on_failed(str(error))
 
     def cancel_separation(self) -> None:
-        # During export the worker is already finished: requesting a cancel
-        # on it would be pointless, so it is ignored.
+        # Cancellation remains a non-blocking request throughout worker work.
         if self._exporting:
             return
         if self._worker is not None:
@@ -239,19 +242,7 @@ class MainWindow(QMainWindow):
         if message:
             self.status_label.setText(message)
 
-    def on_finished(self, outputs: dict) -> None:
-        # The worker has already emitted its terminal signal, so there is
-        # nothing left to cancel while the export runs. Block the button and
-        # drop the "Cancel" label before touching the disk.
-        self._set_exporting_state(True)
-        try:
-            exported = self._export_outputs(outputs)
-        except Exception as error:  # noqa: BLE001
-            self._set_exporting_state(False)
-            self.on_failed(str(error))
-            return
-
-        self._set_exporting_state(False)
+    def on_finished(self, exported: list[str]) -> None:
         self._terminal_received = True
         self.progress_bar.setValue(100)
         self.status_label.setText(self.tr("Done"))
@@ -355,46 +346,10 @@ class MainWindow(QMainWindow):
             self.retranslate_ui()
         super().changeEvent(event)
 
-    # -- export -----------------------------------------------------------
-
-    def _export_outputs(self, outputs: dict) -> list[str]:
-        context = self._run_context
-        if context is None:
-            raise RuntimeError(self.tr("No active run context"))
-        input_path = context.input_path
-        output_dir = context.output_dir
-        song = os.path.splitext(os.path.basename(input_path))[0]
-        song_dir = os.path.join(output_dir, sanitize(song))
-
-        requested = context.stems
-        if not outputs:
-            raise RuntimeError(self.tr("Separation returned no outputs"))
-        missing = requested - outputs.keys()
-        if missing:
-            raise RuntimeError(
-                self.tr("Missing outputs: {stems}").format(
-                    stems=", ".join(sorted(missing))
-                )
-            )
-
-        exported: list[str] = []
-        for stem in sorted(requested):
-            source = outputs[stem]
-            if not Path(source).is_file():
-                raise FileNotFoundError(source)
-            wav_path = stem_filename(input_path, stem, "wav", song_dir)
-            to_wav24(source, wav_path)
-            exported.append(wav_path)
-            mp3_path = stem_filename(input_path, stem, "mp3", song_dir)
-            to_mp3_320(wav_path, mp3_path)
-            exported.append(mp3_path)
-
-        return exported
-
     # -- helpers ----------------------------------------------------------
 
-    def _default_worker_factory(self, input_path, stems, output_dir, model_dir):
-        return SeparationWorker(input_path, stems, output_dir, model_dir)
+    def _default_worker_factory(self, context: RunContext):
+        return SeparationWorker(context)
 
     def _on_separate_clicked(self) -> None:
         if self._running:

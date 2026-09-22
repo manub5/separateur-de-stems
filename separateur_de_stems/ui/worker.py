@@ -6,15 +6,66 @@ interface can stay responsive and cancellable. This module depends on
 """
 
 import multiprocessing
+import os
 import threading
+from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 
+from separateur_de_stems.core.export import to_mp3_320, to_wav24
+from separateur_de_stems.core.naming import sanitize, stem_filename
 from separateur_de_stems.core.process import SubprocessSeparator
+from separateur_de_stems.ui.run_context import RunContext
 
 __all__ = ["SeparationWorker"]
 
 _POLL_TIMEOUT = 0.1
+
+
+def _finalize_outputs(
+    context: RunContext,
+    outputs: dict,
+    wav_exporter=to_wav24,
+    mp3_exporter=to_mp3_320,
+) -> list[str]:
+    """Stage every deliverable, then atomically publish the complete song."""
+    if not outputs:
+        raise RuntimeError("Separation returned no outputs")
+    missing = context.stems - outputs.keys()
+    if missing:
+        raise RuntimeError(f"Missing outputs: {', '.join(sorted(missing))}")
+
+    sources = {stem: Path(outputs[stem]) for stem in context.stems}
+    for source in sources.values():
+        if not source.is_file():
+            raise FileNotFoundError(source)
+
+    song = sanitize(Path(context.input_path).stem)
+    final_song_dir = Path(context.output_dir) / song
+    if os.path.lexists(final_song_dir):
+        raise FileExistsError(f"Output already exists: {final_song_dir}")
+
+    staged_song_dir = Path(context.workspace) / "deliverables" / song
+    exported: list[Path] = []
+    for stem in sorted(context.stems):
+        wav_path = Path(
+            stem_filename(context.input_path, stem, "wav", str(staged_song_dir))
+        )
+        wav_exporter(str(sources[stem]), str(wav_path))
+        exported.append(wav_path)
+        mp3_path = Path(
+            stem_filename(context.input_path, stem, "mp3", str(staged_song_dir))
+        )
+        mp3_exporter(str(wav_path), str(mp3_path))
+        exported.append(mp3_path)
+
+    missing_deliverables = [path for path in exported if not path.is_file()]
+    if missing_deliverables:
+        raise RuntimeError(f"Export did not create: {missing_deliverables[0]}")
+    if os.path.lexists(final_song_dir):
+        raise FileExistsError(f"Output already exists: {final_song_dir}")
+    staged_song_dir.rename(final_song_dir)
+    return [str(final_song_dir / path.name) for path in exported]
 
 
 def _create_progress_queue():
@@ -27,32 +78,28 @@ class SeparationWorker(QThread):
 
     Signals:
         progress: ``(percent, message)`` updates reported by the runner.
-        completed: the raw ``{stem: path}`` mapping on success.
+        completed: final published WAV/MP3 paths on success.
         failed: a human-readable error message.
         cancelled: emitted instead of ``finished``/``failed`` on cancel.
     """
 
     progress = Signal(int, str)
-    completed = Signal(dict)
+    completed = Signal(list)
     failed = Signal(str)
     cancelled = Signal()
 
     def __init__(
         self,
-        input_path,
-        stems,
-        output_dir,
-        model_dir,
+        context: RunContext,
         separator_factory=None,
+        finalize_outputs=None,
         progress_queue=None,
         parent=None,
     ):
         super().__init__(parent)
-        self._input_path = input_path
-        self._stems = set(stems)
-        self._output_dir = output_dir
-        self._model_dir = model_dir
+        self._context = context
         self._separator_factory = separator_factory
+        self._finalize_outputs = finalize_outputs or _finalize_outputs
         self._owns_progress_queue = progress_queue is None
         self._progress_queue = (
             _create_progress_queue() if self._owns_progress_queue else progress_queue
@@ -98,7 +145,7 @@ class SeparationWorker(QThread):
         separator = self._build_separator()
         self._separator = separator
 
-        separator.start(self._input_path, self._stems)
+        separator.start(self._context.input_path, set(self._context.stems))
 
         while True:
             outcome = separator.poll(timeout=_POLL_TIMEOUT)
@@ -114,7 +161,10 @@ class SeparationWorker(QThread):
             elif status == "error":
                 self.failed.emit(str(payload))
             else:
-                self.completed.emit(dict(payload or {}))
+                exported = self._finalize_outputs(
+                    self._context, dict(payload or {})
+                )
+                self.completed.emit(exported)
             return
 
     def _build_separator(self):
@@ -122,15 +172,15 @@ class SeparationWorker(QThread):
         if factory is not None:
             return factory(
                 engine_kwargs={
-                    "model_dir": self._model_dir,
-                    "output_dir": self._output_dir,
+                    "model_dir": self._context.model_dir,
+                    "output_dir": self._context.workspace,
                 },
                 progress_queue=self._progress_queue,
             )
         return SubprocessSeparator(
             engine_kwargs={
-                "model_dir": self._model_dir,
-                "output_dir": self._output_dir,
+                "model_dir": self._context.model_dir,
+                "output_dir": self._context.workspace,
             },
             progress_queue=self._progress_queue,
         )

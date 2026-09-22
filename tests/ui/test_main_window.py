@@ -13,7 +13,6 @@ from pathlib import Path
 import pytest
 from PySide6.QtCore import QObject, Signal
 
-from separateur_de_stems.ui import main_window as main_window_module
 from separateur_de_stems.ui.main_window import MainWindow
 from separateur_de_stems.ui.run_context import RunContext
 from separateur_de_stems.ui.settings import Settings
@@ -69,8 +68,8 @@ def fake_factory():
     """Worker factory creating fakes and keeping them alive for inspection."""
     created = []
 
-    def factory(input_path, stems, output_dir, model_dir):
-        worker = FakeWorker(input_path, stems, output_dir, model_dir)
+    def factory(context):
+        worker = FakeWorker(context)
         created.append(worker)
         return worker
 
@@ -213,17 +212,7 @@ def test_cancel_separation_requests_cancel(qtbot, settings, tmp_path, fake_facto
 def test_terminal_result_uses_captured_paths_and_stays_locked_until_thread_finished(
     qtbot, settings, tmp_path, fake_factory, monkeypatch
 ):
-    exports = []
-    monkeypatch.setattr(
-        main_window_module,
-        "to_wav24",
-        lambda src, dest: exports.append(dest) or dest,
-    )
-    monkeypatch.setattr(
-        main_window_module,
-        "to_mp3_320",
-        lambda src, dest: exports.append(dest) or dest,
-    )
+    offered = []
     audio = tmp_path / "original.wav"
     audio.write_bytes(b"audio")
     output = tmp_path / "original-output"
@@ -232,19 +221,13 @@ def test_terminal_result_uses_captured_paths_and_stays_locked_until_thread_finis
     window.open_file(str(audio))
     window.output_edit.setText(str(output))
     window.start_separation()
-    context = window._run_context
-    raw = Path(context.workspace) / "vocals.wav"
-    raw.write_bytes(b"raw")
+    monkeypatch.setattr(window, "_offer_open_folder", offered.append)
 
     window._input_path = str(tmp_path / "changed.wav")
     window.output_edit.setText(str(tmp_path / "changed-output"))
-    fake_factory.created[0].completed.emit(
-        {"vocals": str(raw), "instrumental": str(raw)}
-    )
+    fake_factory.created[0].completed.emit([str(output / "original" / "stem.wav")])
 
-    assert exports
-    assert all(str(output) in path for path in exports)
-    assert all("original_" in path for path in exports)
+    assert offered == [str(output)]
     assert window.drop_zone.isEnabled() is False
     assert window._worker is fake_factory.created[0]
 
@@ -268,8 +251,9 @@ def test_configured_model_directory_and_private_workspace_are_passed_to_worker(
     window.start_separation()
 
     worker = fake_factory.created[0]
-    assert worker.args[2] == window._run_context.workspace
-    assert worker.args[3] == str(model_dir)
+    assert worker.args == (window._run_context,)
+    assert worker.args[0].model_dir == str(model_dir)
+    assert Path(worker.args[0].workspace).parent == tmp_path / "out"
 
 
 def test_missing_input_and_empty_output_do_not_start(
@@ -279,11 +263,14 @@ def test_missing_input_and_empty_output_do_not_start(
     missing = tmp_path / "missing.wav"
     window = _make_window(qtbot, settings, worker_factory=fake_factory)
     window.open_file(str(missing))
-    window.output_edit.setText("   ")
+    window.output_edit.setText(str(tmp_path / "out"))
+    window._input_path = str(missing)
 
     window.start_separation()
 
     assert fake_factory.created == []
+    assert window.status_label.text() == window.tr("Failed")
+    assert "not readable" in window.log_view.toPlainText()
 
 
 def test_incomplete_outputs_fail_and_cleanup_only_workspace(
@@ -304,7 +291,7 @@ def test_incomplete_outputs_fail_and_cleanup_only_workspace(
     partial = workspace / "partial.wav"
     partial.write_bytes(b"partial")
 
-    fake_factory.created[0].completed.emit({})
+    fake_factory.created[0].failed.emit("Missing outputs: instrumental")
     fake_factory.created[0].finished.emit()
 
     assert window.status_label.text() == window.tr("Failed")
@@ -369,6 +356,38 @@ def test_native_finish_without_terminal_result_fails(
     assert "terminal" in window.log_view.toPlainText().lower()
 
 
+@pytest.mark.parametrize("failure_stage", ["construct", "start"])
+def test_worker_launch_failure_cleans_workspace_and_restores_ui(
+    qtbot, settings, tmp_path, failure_stage
+):
+    contexts = []
+
+    class StartFailWorker(FakeWorker):
+        def start(self):
+            raise RuntimeError("start failed")
+
+    def factory(context):
+        contexts.append(context)
+        if failure_stage == "construct":
+            raise RuntimeError("construction failed")
+        return StartFailWorker(context)
+
+    audio = tmp_path / "song.wav"
+    audio.write_bytes(b"audio")
+    window = _make_window(qtbot, settings, worker_factory=factory)
+    window.open_file(str(audio))
+    window.output_edit.setText(str(tmp_path / "out"))
+
+    window.start_separation()
+
+    assert len(contexts) == 1
+    assert Path(contexts[0].workspace).exists() is False
+    assert window._worker is None
+    assert window.drop_zone.isEnabled() is True
+    assert window.status_label.text() == window.tr("Failed")
+    assert "failed" in window.log_view.toPlainText().lower()
+
+
 def test_on_progress_updates_bar_and_status(qtbot, settings):
     window = _make_window(qtbot, settings)
     window.on_progress(42, "Separating vocals")
@@ -376,51 +395,9 @@ def test_on_progress_updates_bar_and_status(qtbot, settings):
     assert "Separating vocals" in window.status_label.text()
 
 
-def test_on_finished_exports_wav_and_mp3(
-    qtbot, settings, tmp_path, monkeypatch, fake_factory
-):
-    wav_calls = []
-    mp3_calls = []
-
-    def fake_wav24(src, dest):
-        wav_calls.append((src, dest))
-        return dest
-
-    def fake_mp3_320(src, dest):
-        mp3_calls.append((src, dest))
-        return dest
-
-    monkeypatch.setattr(main_window_module, "to_wav24", fake_wav24)
-    monkeypatch.setattr(main_window_module, "to_mp3_320", fake_mp3_320)
-
-    window = _make_window(qtbot, settings, worker_factory=fake_factory)
-    audio = tmp_path / "My Song.wav"
-    audio.write_bytes(b"")
-    window.open_file(str(audio))
-    output_dir = tmp_path / "out"
-    window.output_edit.setText(str(output_dir))
-    window.stem_checkboxes["instrumental"].setChecked(False)
-    window.start_separation()
-
-    mock_dir = output_dir / "My Song"
-    expected_wav = os.path.join(str(mock_dir), "My Song_vocals.wav")
-    expected_mp3 = os.path.join(str(mock_dir), "My Song_vocals.mp3")
-    raw_source = Path(window._run_context.workspace) / "raw_vocals.wav"
-    raw_source.write_bytes(b"")
-    fake_factory.created[0].completed.emit({"vocals": str(raw_source)})
-    fake_factory.created[0].finished.emit()
-
-    assert (str(raw_source), expected_wav) in wav_calls
-    assert (expected_wav, expected_mp3) in mp3_calls
-    assert window.separate_button.text() == window.tr("Separate")
-
-
 def test_on_finished_resets_running_state(
-    qtbot, settings, tmp_path, monkeypatch, fake_factory
+    qtbot, settings, tmp_path, fake_factory
 ):
-    monkeypatch.setattr(main_window_module, "to_wav24", lambda src, dest: dest)
-    monkeypatch.setattr(main_window_module, "to_mp3_320", lambda src, dest: dest)
-
     window = _make_window(qtbot, settings, worker_factory=fake_factory)
     audio = tmp_path / "song.wav"
     audio.write_bytes(b"")
@@ -429,55 +406,13 @@ def test_on_finished_resets_running_state(
     window.stem_checkboxes["instrumental"].setChecked(False)
     window.start_separation()
 
-    raw = Path(window._run_context.workspace) / "raw.wav"
-    raw.write_bytes(b"raw")
-    fake_factory.created[0].completed.emit({"vocals": str(raw)})
+    fake_factory.created[0].completed.emit([str(tmp_path / "out" / "song.wav")])
 
     assert window.separate_button.text() == window.tr("Cancel")
     assert window.drop_zone.isEnabled() is False
     fake_factory.created[0].finished.emit()
     assert window.separate_button.text() == window.tr("Separate")
     assert window.output_edit.isEnabled() is True
-
-
-def test_button_is_not_cancellable_during_export(
-    qtbot, settings, tmp_path, fake_factory, monkeypatch
-):
-    """During export there is no live worker, so cancel must be unavailable."""
-    observed = []
-
-    def probe_wav24(src, dest):
-        observed.append(
-            (
-                window.separate_button.isEnabled(),
-                window.separate_button.text(),
-            )
-        )
-        return dest
-
-    monkeypatch.setattr(main_window_module, "to_wav24", probe_wav24)
-    monkeypatch.setattr(main_window_module, "to_mp3_320", lambda src, dest: dest)
-
-    window = _make_window(qtbot, settings, worker_factory=fake_factory)
-    audio = tmp_path / "song.wav"
-    audio.write_bytes(b"")
-    window.open_file(str(audio))
-    output_dir = tmp_path / "out"
-    output_dir.mkdir()
-    window.output_edit.setText(str(output_dir))
-    window.stem_checkboxes["instrumental"].setChecked(False)
-    window.start_separation()
-
-    raw = Path(window._run_context.workspace) / "raw_vocals.wav"
-    raw.write_bytes(b"")
-    fake_factory.created[0].completed.emit({"vocals": str(raw)})
-
-    assert observed, "export was never reached"
-    for enabled, text in observed:
-        assert enabled is False
-        assert text != window.tr("Cancel")
-    fake_factory.created[0].finished.emit()
-    assert window.separate_button.text() == window.tr("Separate")
 
 
 def test_cancel_without_worker_is_harmless(qtbot, settings):
@@ -517,36 +452,6 @@ def test_on_cancelled_resets(qtbot, settings, tmp_path, fake_factory):
     assert window.tr("Cancelled") in window.log_view.toPlainText()
 
 
-def test_success_never_deletes_sources_outside_workspace(
-    qtbot, settings, tmp_path, monkeypatch, fake_factory
-):
-    """Cleanup is confined to the private workspace, not inferred sources."""
-    monkeypatch.setattr(main_window_module, "to_wav24", lambda src, dest: dest)
-    monkeypatch.setattr(main_window_module, "to_mp3_320", lambda src, dest: dest)
-
-    window = _make_window(qtbot, settings, worker_factory=fake_factory)
-    audio = tmp_path / "song.wav"
-    audio.write_bytes(b"")
-    window.open_file(str(audio))
-    output_dir = tmp_path / "out"
-    output_dir.mkdir()
-    window.output_edit.setText(str(output_dir))
-    window.start_separation()
-
-    inside = output_dir / "raw_vocals.wav"
-    inside.write_bytes(b"")
-    outside = tmp_path / "raw_instrumental.wav"
-    outside.write_bytes(b"")
-
-    fake_factory.created[0].completed.emit(
-        {"vocals": str(inside), "instrumental": str(outside)}
-    )
-    fake_factory.created[0].finished.emit()
-
-    assert inside.exists() is True
-    assert outside.exists() is True
-
-
 def test_on_cancelled_removes_only_run_partials(
     qtbot, settings, tmp_path, fake_factory
 ):
@@ -578,42 +483,3 @@ def test_on_cancelled_removes_only_run_partials(
 
     window.on_cancelled()
     assert preexisting.read_bytes() == b"keep me"
-
-
-def test_on_finished_exports_only_requested_stems(
-    qtbot, settings, tmp_path, fake_factory, monkeypatch
-):
-    """Only the stems requested at launch are exported, not every output key."""
-    wav_calls = []
-
-    def fake_wav24(src, dest):
-        wav_calls.append((src, dest))
-        return dest
-
-    monkeypatch.setattr(main_window_module, "to_wav24", fake_wav24)
-    monkeypatch.setattr(main_window_module, "to_mp3_320", lambda src, dest: dest)
-
-    window = _make_window(qtbot, settings, worker_factory=fake_factory)
-    audio = tmp_path / "song.wav"
-    audio.write_bytes(b"")
-    window.open_file(str(audio))
-    output_dir = tmp_path / "out"
-    output_dir.mkdir()
-    window.output_edit.setText(str(output_dir))
-
-    window.stem_checkboxes["instrumental"].setChecked(False)
-    window.start_separation()
-
-    vocals_src = output_dir / "raw_vocals.wav"
-    vocals_src.write_bytes(b"")
-    instrumental_src = output_dir / "raw_instrumental.wav"
-    instrumental_src.write_bytes(b"")
-
-    window.on_finished(
-        {"vocals": str(vocals_src), "instrumental": str(instrumental_src)}
-    )
-
-    exported_sources = {os.path.basename(src) for src, _ in wav_calls}
-    assert "raw_vocals.wav" in exported_sources
-    assert "raw_instrumental.wav" not in exported_sources
-    assert instrumental_src.exists() is True

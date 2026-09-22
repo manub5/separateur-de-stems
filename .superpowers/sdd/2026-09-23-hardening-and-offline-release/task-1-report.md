@@ -35,5 +35,32 @@ Result: `131 passed in 2.65s` on the final pre-commit run.
 
 - Cleanup is idempotent through `shutil.rmtree(..., ignore_errors=True)` and never scans or deletes user output files.
 - Invalid paths can create the requested output directory during preflight validation; this is the intended validation side effect.
-- GUI-side WAV/MP3 export remains synchronous legacy behaviour. Moving export into the background process is outside this task, but remains a responsiveness concern for a later task.
+- WAV/MP3 export now runs in `SeparationWorker`, so conversion cannot block the GUI event loop. Task 2 can still centralize this temporary integration in the pipeline.
 - macOS-specific thread and close behaviour cannot be exercised on Linux; Qt offscreen tests cover the platform-independent lifecycle.
+
+## Review Fix Commit
+
+The review findings were addressed with these changes:
+
+- `SeparationWorker` now receives only `RunContext`, performs export in its own thread, and emits success only after publication.
+- All WAV/MP3 files are built and validated under the private workspace. The complete song directory is renamed into place only after every requested deliverable exists.
+- Existing destination song directories cause a failure and remain untouched; no implicit overwrite occurs.
+- Missing stems and export failures leave no final deliverables.
+- Missing-input validation is exercised with otherwise valid output and model paths and asserts the visible failure.
+- Worker construction and `start()` failures now clean the workspace, clear retained state, unlock controls, and report the error.
+
+TDD red runs reproduced missing atomic finalization, GUI-thread export, invalid factory shape, and uncaught launch exceptions. The focused red run reported six expected failures before implementation. The first full green UI run after the correction was:
+
+```text
+QT_QPA_PLATFORM=offscreen ../../.venv/bin/python -m pytest tests/ui -q
+133 passed in 2.67s
+```
+
+Final pre-commit verification:
+
+```text
+QT_QPA_PLATFORM=offscreen ../../.venv/bin/python -m pytest tests/ui -q
+133 passed in 2.46s
+git diff --check
+exit 0
+```

@@ -7,8 +7,12 @@ offscreen mode and signals are awaited with ``qtbot.waitSignal``.
 
 import threading
 import time
+from pathlib import Path
+
+import pytest
 
 from separateur_de_stems.ui import worker as worker_module
+from separateur_de_stems.ui.run_context import RunContext
 from separateur_de_stems.ui.worker import SeparationWorker
 
 
@@ -93,21 +97,29 @@ class BlockingSep(FakeSep):
         return None
 
 
+def _worker(factory, *, context=None, progress_queue=None):
+    context = context or RunContext(
+        "in.wav", "/out", "models", frozenset({"vocals"}), "/out"
+    )
+    return SeparationWorker(
+        context,
+        separator_factory=factory,
+        finalize_outputs=lambda _context, outputs: list(outputs.values()),
+        progress_queue=progress_queue,
+    )
+
+
 def test_worker_emits_completed(qtbot):
     factory = RetainedFactory(FakeSep)
-    worker = SeparationWorker(
-        "in.wav", {"vocals"}, "/out", "models", separator_factory=factory
-    )
+    worker = _worker(factory)
     with qtbot.waitSignal(worker.completed, timeout=3000) as signal:
         worker.start()
-    assert signal.args[0] == {"vocals": "/tmp/v.wav"}
+    assert signal.args[0] == ["/tmp/v.wav"]
 
 
 def test_worker_forwards_progress(qtbot):
     factory = RetainedFactory(FakeSep)
-    worker = SeparationWorker(
-        "in.wav", {"vocals"}, "/out", "models", separator_factory=factory
-    )
+    worker = _worker(factory)
     with qtbot.waitSignal(worker.progress, timeout=3000) as signal:
         worker.start()
     assert signal.args == [50, "Separating vocals"]
@@ -115,9 +127,7 @@ def test_worker_forwards_progress(qtbot):
 
 def test_worker_emits_failed(qtbot):
     factory = RetainedFactory(lambda: FakeSep(outcome=("error", "boom")))
-    worker = SeparationWorker(
-        "in.wav", {"vocals"}, "/out", "models", separator_factory=factory
-    )
+    worker = _worker(factory)
     with qtbot.waitSignal(worker.failed, timeout=3000) as signal:
         worker.start()
     assert "boom" in signal.args[0]
@@ -130,9 +140,7 @@ def test_worker_emits_cancelled_when_runner_cancelled(qtbot):
             return ("cancelled", None)
 
     factory = RetainedFactory(CancelAfterOnePollSep)
-    worker = SeparationWorker(
-        "in.wav", {"vocals"}, "/out", "models", separator_factory=factory
-    )
+    worker = _worker(factory)
     with qtbot.waitSignal(worker.cancelled, timeout=3000):
         worker.start()
     assert factory.last().started is True
@@ -140,9 +148,7 @@ def test_worker_emits_cancelled_when_runner_cancelled(qtbot):
 
 def test_request_cancel_before_run_is_idempotent(qtbot):
     factory = RetainedFactory(FakeSep)
-    worker = SeparationWorker(
-        "in.wav", {"vocals"}, "/out", "models", separator_factory=factory
-    )
+    worker = _worker(factory)
     worker.request_cancel()
     worker.request_cancel()
     with qtbot.waitSignal(worker.cancelled, timeout=3000):
@@ -152,9 +158,7 @@ def test_request_cancel_before_run_is_idempotent(qtbot):
 
 def test_request_cancel_during_run_cancels_separator(qtbot):
     factory = RetainedFactory(BlockingSep)
-    worker = SeparationWorker(
-        "in.wav", {"vocals"}, "/out", "models", separator_factory=factory
-    )
+    worker = _worker(factory)
 
     def cancel_when_started():
         if not _wait_for(lambda: factory.last() is not None and factory.last().started):
@@ -173,14 +177,15 @@ def test_request_cancel_during_run_cancels_separator(qtbot):
 
 def test_factory_receives_model_and_output_dir(qtbot):
     factory = RetainedFactory(FakeSep)
-    worker = SeparationWorker(
-        "in.wav", {"vocals"}, "/some/out", "/some/models", separator_factory=factory
+    context = RunContext(
+        "in.wav", "/final/out", "/some/models", frozenset({"vocals"}), "/some/work"
     )
+    worker = _worker(factory, context=context)
     with qtbot.waitSignal(worker.completed, timeout=3000):
         worker.start()
     kwargs = factory.factory_kwargs
     assert kwargs["engine_kwargs"]["model_dir"] == "/some/models"
-    assert kwargs["engine_kwargs"]["output_dir"] == "/some/out"
+    assert kwargs["engine_kwargs"]["output_dir"] == "/some/work"
     assert kwargs["progress_queue"] is not None
 
 
@@ -188,9 +193,7 @@ def test_unexpected_constructor_error_becomes_failed(qtbot):
     def exploding_factory(**kwargs):
         raise RuntimeError("no separator for you")
 
-    worker = SeparationWorker(
-        "in.wav", {"vocals"}, "/out", "models", separator_factory=exploding_factory
-    )
+    worker = _worker(exploding_factory)
     with qtbot.waitSignal(worker.failed, timeout=3000) as signal:
         worker.start()
     assert "no separator for you" in signal.args[0]
@@ -202,9 +205,7 @@ def test_no_exception_escapes_run_when_start_raises(qtbot):
             raise ValueError("start exploded")
 
     factory = RetainedFactory(StartFailSep)
-    worker = SeparationWorker(
-        "in.wav", {"vocals"}, "/out", "models", separator_factory=factory
-    )
+    worker = _worker(factory)
     with qtbot.waitSignal(worker.failed, timeout=3000) as signal:
         worker.start()
     assert "start exploded" in signal.args[0]
@@ -232,9 +233,7 @@ def test_worker_closes_its_own_progress_queue(qtbot):
     worker_module._create_progress_queue = make_queue
     try:
         factory = RetainedFactory(FakeSep)
-        worker = SeparationWorker(
-            "in.wav", {"vocals"}, "/out", "models", separator_factory=factory
-        )
+        worker = _worker(factory)
         with qtbot.waitSignal(worker.completed, timeout=3000):
             worker.start()
     finally:
@@ -246,14 +245,7 @@ def test_worker_closes_its_own_progress_queue(qtbot):
 def test_worker_leaves_caller_progress_queue_open(qtbot):
     provided = TrackingQueue()
     factory = RetainedFactory(FakeSep)
-    worker = SeparationWorker(
-        "in.wav",
-        {"vocals"},
-        "/out",
-        "models",
-        separator_factory=factory,
-        progress_queue=provided,
-    )
+    worker = _worker(factory, progress_queue=provided)
     with qtbot.waitSignal(worker.finished, timeout=3000):
         worker.start()
     assert provided.close_calls == 0
@@ -265,9 +257,7 @@ def test_runtime_error_becomes_failed(qtbot):
             raise RuntimeError("runtime exploded")
 
     factory = RetainedFactory(RuntimeFailSep)
-    worker = SeparationWorker(
-        "in.wav", {"vocals"}, "/out", "models", separator_factory=factory
-    )
+    worker = _worker(factory)
     with qtbot.waitSignal(worker.failed, timeout=3000) as signal:
         worker.start()
     assert "runtime exploded" in signal.args[0]
@@ -279,9 +269,7 @@ def test_system_exit_is_not_converted_to_failed(qtbot):
             raise SystemExit(3)
 
     factory = RetainedFactory(SystemExitSep)
-    worker = SeparationWorker(
-        "in.wav", {"vocals"}, "/out", "models", separator_factory=factory
-    )
+    worker = _worker(factory)
     failed = []
     worker.failed.connect(failed.append)
 
@@ -304,9 +292,7 @@ def test_system_exit_is_not_converted_to_failed(qtbot):
 
 def test_request_cancel_does_not_call_separator_from_caller_thread(qtbot):
     factory = RetainedFactory(BlockingSep)
-    worker = SeparationWorker(
-        "in.wav", {"vocals"}, "/out", "models", separator_factory=factory
-    )
+    worker = _worker(factory)
     requester_threads = []
     cancel_threads = []
 
@@ -330,3 +316,108 @@ def test_request_cancel_does_not_call_separator_from_caller_thread(qtbot):
 
     assert cancel_threads
     assert cancel_threads != requester_threads
+
+
+def _run_context(tmp_path, stems=frozenset({"vocals", "instrumental"})):
+    workspace = tmp_path / "out" / ".run"
+    workspace.mkdir(parents=True)
+    input_path = tmp_path / "song.wav"
+    input_path.write_bytes(b"input")
+    return RunContext(
+        str(input_path),
+        str(tmp_path / "out"),
+        str(tmp_path / "models"),
+        stems,
+        str(workspace),
+    )
+
+
+def _writing_exporter(src, dest):
+    Path(dest).parent.mkdir(parents=True, exist_ok=True)
+    Path(dest).write_bytes(Path(src).read_bytes())
+    return dest
+
+
+def test_partial_result_publishes_no_deliverables(tmp_path):
+    context = _run_context(tmp_path)
+    raw = Path(context.workspace) / "vocals.wav"
+    raw.write_bytes(b"raw")
+
+    with pytest.raises(RuntimeError, match="Missing outputs"):
+        worker_module._finalize_outputs(
+            context,
+            {"vocals": str(raw)},
+            wav_exporter=_writing_exporter,
+            mp3_exporter=_writing_exporter,
+        )
+
+    assert list(Path(context.output_dir).glob("song/*")) == []
+
+
+def test_export_failure_publishes_no_partial_deliverables(tmp_path):
+    context = _run_context(tmp_path)
+    outputs = {}
+    for stem in context.stems:
+        raw = Path(context.workspace) / f"{stem}.wav"
+        raw.write_bytes(stem.encode())
+        outputs[stem] = str(raw)
+
+    calls = 0
+
+    def fail_second_mp3(src, dest):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError("encoding failed")
+        return _writing_exporter(src, dest)
+
+    with pytest.raises(RuntimeError, match="encoding failed"):
+        worker_module._finalize_outputs(
+            context,
+            outputs,
+            wav_exporter=_writing_exporter,
+            mp3_exporter=fail_second_mp3,
+        )
+
+    assert (Path(context.output_dir) / "song").exists() is False
+
+
+def test_existing_song_directory_is_preserved_without_overwrite(tmp_path):
+    context = _run_context(tmp_path, frozenset({"vocals"}))
+    final_dir = Path(context.output_dir) / "song"
+    final_dir.mkdir()
+    existing = final_dir / "song_vocals.wav"
+    existing.write_bytes(b"keep")
+    raw = Path(context.workspace) / "vocals.wav"
+    raw.write_bytes(b"new")
+
+    with pytest.raises(FileExistsError):
+        worker_module._finalize_outputs(
+            context,
+            {"vocals": str(raw)},
+            wav_exporter=_writing_exporter,
+            mp3_exporter=_writing_exporter,
+        )
+
+    assert existing.read_bytes() == b"keep"
+
+
+def test_finalization_runs_in_worker_thread(qtbot, tmp_path):
+    context = _run_context(tmp_path, frozenset({"vocals"}))
+    factory = RetainedFactory(FakeSep)
+    thread_ids = []
+
+    def finalize(run_context, outputs):
+        thread_ids.append(threading.get_ident())
+        return [str(Path(run_context.output_dir) / "song" / "song_vocals.wav")]
+
+    worker = SeparationWorker(
+        context, separator_factory=factory, finalize_outputs=finalize
+    )
+    gui_thread = threading.get_ident()
+
+    with qtbot.waitSignal(worker.completed, timeout=3000):
+        worker.start()
+
+    assert thread_ids
+    assert thread_ids != [gui_thread]
