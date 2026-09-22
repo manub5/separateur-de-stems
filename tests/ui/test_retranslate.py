@@ -61,6 +61,39 @@ def test_retranslate_ui_switches_separate_button_fr_then_en(
     assert window.separate_button.text() == "Separate"
 
 
+def test_retranslate_ui_keeps_cancel_label_while_running(
+    qtbot, settings, app
+):
+    window = _make_window(qtbot, settings)
+    window._set_running_state(True)
+    assert window.separate_button.text() == "Cancel"
+
+    assert i18n.install_translators(app, "fr") == "fr"
+    window.retranslate_ui()
+    assert window.separate_button.text() == "Annuler"
+
+    assert i18n.install_translators(app, "en") == "en"
+    window.retranslate_ui()
+    assert window.separate_button.text() == "Cancel"
+
+
+def test_retranslate_ui_uses_separate_label_while_exporting(
+    qtbot, settings, app
+):
+    window = _make_window(qtbot, settings)
+    window._set_running_state(True)
+    window._set_exporting_state(True)
+    assert window.separate_button.text() == "Separate"
+
+    assert i18n.install_translators(app, "fr") == "fr"
+    window.retranslate_ui()
+    assert window.separate_button.text() == "Séparer"
+
+    assert i18n.install_translators(app, "en") == "en"
+    window.retranslate_ui()
+    assert window.separate_button.text() == "Separate"
+
+
 def test_change_event_language_change_updates_window_title(
     qtbot, settings, app
 ):
