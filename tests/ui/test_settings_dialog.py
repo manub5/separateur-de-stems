@@ -7,6 +7,7 @@ access ever happens here.
 """
 
 import pytest
+from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QMessageBox
 
 from separateur_de_stems.ui import main_window as main_window_module
@@ -121,8 +122,11 @@ def test_clear_cache_declined_keeps_everything(
 def test_open_settings_opens_dialog(qtbot, settings, monkeypatch):
     calls = []
 
-    class FakeDialog:
+    class FakeDialog(QObject):
+        languageChanged = Signal(str)
+
         def __init__(self, settings_arg, parent=None):
+            super().__init__()
             calls.append((settings_arg, parent))
             self.accepted = True
 

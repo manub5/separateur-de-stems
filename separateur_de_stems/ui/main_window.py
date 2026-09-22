@@ -13,8 +13,9 @@ sub-directory, exporting a 24-bit WAV and a 320 kb/s MP3 for every stem.
 import os
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, Qt
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QFileDialog,
     QHBoxLayout,
@@ -32,6 +33,7 @@ from PySide6.QtWidgets import (
 from separateur_de_stems.core.export import to_mp3_320, to_wav24
 from separateur_de_stems.core.models import is_supported_audio
 from separateur_de_stems.core.naming import sanitize, stem_filename
+from separateur_de_stems.ui import i18n
 from separateur_de_stems.ui.drop_zone import DropZone
 from separateur_de_stems.ui.paths import default_model_dir, default_output_dir
 from separateur_de_stems.ui.settings import Settings
@@ -66,23 +68,23 @@ class MainWindow(QMainWindow):
     # -- construction -----------------------------------------------------
 
     def _build_menu(self) -> None:
-        file_menu = self.menuBar().addMenu(self.tr("File"))
+        self._file_menu = self.menuBar().addMenu(self.tr("File"))
 
-        open_action = file_menu.addAction(self.tr("Open…"))
-        open_action.triggered.connect(self._choose_input_file)
+        self._open_action = self._file_menu.addAction(self.tr("Open…"))
+        self._open_action.triggered.connect(self._choose_input_file)
 
-        file_menu.addSeparator()
-        quit_action = file_menu.addAction(self.tr("Quit"))
-        quit_action.setShortcut("Ctrl+Q")
-        quit_action.triggered.connect(self.close)
+        self._file_menu.addSeparator()
+        self._quit_action = self._file_menu.addAction(self.tr("Quit"))
+        self._quit_action.setShortcut("Ctrl+Q")
+        self._quit_action.triggered.connect(self.close)
 
-        edit_menu = self.menuBar().addMenu(self.tr("Edit"))
-        settings_action = edit_menu.addAction(self.tr("Settings…"))
-        settings_action.triggered.connect(self.open_settings)
+        self._edit_menu = self.menuBar().addMenu(self.tr("Edit"))
+        self._settings_action = self._edit_menu.addAction(self.tr("Settings…"))
+        self._settings_action.triggered.connect(self.open_settings)
 
-        help_menu = self.menuBar().addMenu(self.tr("Help"))
-        about_action = help_menu.addAction(self.tr("About"))
-        about_action.triggered.connect(self._show_about)
+        self._help_menu = self.menuBar().addMenu(self.tr("Help"))
+        self._about_action = self._help_menu.addAction(self.tr("About"))
+        self._about_action.triggered.connect(self._show_about)
 
     def _build_ui(self) -> None:
         central = QWidget(self)
@@ -93,12 +95,12 @@ class MainWindow(QMainWindow):
         self.drop_zone.fileRejected.connect(self._on_file_rejected)
         layout.addWidget(self.drop_zone)
 
-        open_button = QPushButton(self.tr("Open…"), central)
-        open_button.clicked.connect(self._choose_input_file)
-        layout.addWidget(open_button)
+        self.open_button = QPushButton(self.tr("Open…"), central)
+        self.open_button.clicked.connect(self._choose_input_file)
+        layout.addWidget(self.open_button)
 
-        stems_label = QLabel(self.tr("Stems to extract"), central)
-        layout.addWidget(stems_label)
+        self.stems_label = QLabel(self.tr("Stems to extract"), central)
+        layout.addWidget(self.stems_label)
 
         self.stem_checkboxes: dict[str, QCheckBox] = {}
         stems_layout = QHBoxLayout()
@@ -109,17 +111,17 @@ class MainWindow(QMainWindow):
             stems_layout.addWidget(checkbox)
         layout.addLayout(stems_layout)
 
-        output_label = QLabel(self.tr("Output folder"), central)
-        layout.addWidget(output_label)
+        self.output_label = QLabel(self.tr("Output folder"), central)
+        layout.addWidget(self.output_label)
 
         output_layout = QHBoxLayout()
         self.output_edit = QLineEdit(central)
         self.output_edit.textChanged.connect(self._update_controls)
         output_layout.addWidget(self.output_edit)
 
-        choose_button = QPushButton(self.tr("Choose…"), central)
-        choose_button.clicked.connect(self._choose_output_dir)
-        output_layout.addWidget(choose_button)
+        self.choose_button = QPushButton(self.tr("Choose…"), central)
+        self.choose_button.clicked.connect(self._choose_output_dir)
+        output_layout.addWidget(self.choose_button)
         layout.addLayout(output_layout)
 
         self.separate_button = QPushButton(self.tr("Separate"), central)
@@ -253,11 +255,78 @@ class MainWindow(QMainWindow):
     def open_settings(self) -> None:
         """Open the settings dialog and persist accepted values.
 
-        Applying the language itself is deferred to Plan B; the value is
-        already persisted by the dialog so the choice survives a restart.
+        A language change is applied live through ``apply_language`` so the
+        window, menus and dialogs switch without a restart.
         """
         dialog = SettingsDialog(self._settings, parent=self)
+        dialog.languageChanged.connect(self.apply_language)
         dialog.exec()
+
+    def apply_language(self, setting: str) -> None:
+        """Persist ``setting`` and install the matching translators.
+
+        The translators are installed on the running application; Qt then
+        sends a ``LanguageChange`` event to every widget, which triggers
+        ``retranslate_ui`` through ``changeEvent``. The explicit call keeps
+        the window consistent when no event loop is running.
+        """
+        self._settings.language = setting
+        self._settings.sync()
+        app = QApplication.instance()
+        if app is not None:
+            i18n.install_translators(app, setting)
+        self.retranslate_ui()
+
+    # -- translation ------------------------------------------------------
+
+    def retranslate_ui(self) -> None:
+        """Reapply every translated string after a language change.
+
+        Safe to call when the widgets do not exist yet: each block runs only
+        when the attribute has been built.
+        """
+        self.setWindowTitle(self.tr("Stem Separator"))
+        self._retranslate_menu()
+        self._retranslate_widgets()
+
+    def _retranslate_menu(self) -> None:
+        if hasattr(self, "_file_menu"):
+            self._file_menu.setTitle(self.tr("File"))
+            self._open_action.setText(self.tr("Open…"))
+            self._quit_action.setText(self.tr("Quit"))
+            self._edit_menu.setTitle(self.tr("Edit"))
+            self._settings_action.setText(self.tr("Settings…"))
+            self._help_menu.setTitle(self.tr("Help"))
+            self._about_action.setText(self.tr("About"))
+
+    def _retranslate_widgets(self) -> None:
+        if hasattr(self, "drop_zone"):
+            self.drop_zone.retranslate_ui()
+        if hasattr(self, "open_button"):
+            self.open_button.setText(self.tr("Open…"))
+        if hasattr(self, "stems_label"):
+            self.stems_label.setText(self.tr("Stems to extract"))
+        if hasattr(self, "stem_checkboxes"):
+            for stem, checkbox in self.stem_checkboxes.items():
+                checkbox.setText(self._stem_label(stem))
+        if hasattr(self, "output_label"):
+            self.output_label.setText(self.tr("Output folder"))
+        if hasattr(self, "choose_button"):
+            self.choose_button.setText(self.tr("Choose…"))
+        if hasattr(self, "separate_button"):
+            self._set_button_label()
+
+    def _set_button_label(self) -> None:
+        """Refresh the separate/cancel button for the current run state."""
+        if self._running and not self._exporting:
+            self.separate_button.setText(self.tr("Cancel"))
+        else:
+            self.separate_button.setText(self.tr("Separate"))
+
+    def changeEvent(self, event) -> None:
+        if event.type() == QEvent.Type.LanguageChange:
+            self.retranslate_ui()
+        super().changeEvent(event)
 
     # -- export -----------------------------------------------------------
 
@@ -425,14 +494,12 @@ class MainWindow(QMainWindow):
         nor offer cancellation while the files are written.
         """
         self._exporting = exporting
-        self.separate_button.setText(self.tr("Separate"))
+        self._set_button_label()
         self._update_controls()
 
     def _set_running_state(self, running: bool) -> None:
         self._running = running
-        self.separate_button.setText(
-            self.tr("Cancel") if running else self.tr("Separate")
-        )
+        self._set_button_label()
         self.drop_zone.setEnabled(not running)
         self.output_edit.setEnabled(not running)
         for checkbox in self.stem_checkboxes.values():

@@ -8,6 +8,7 @@ point at a temporary directory instead of the real cache.
 import shutil
 from pathlib import Path
 
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -32,6 +33,8 @@ __all__ = ["SettingsDialog"]
 class SettingsDialog(QDialog):
     """Edit the persisted preferences and clear the model cache."""
 
+    languageChanged = Signal(str)
+
     def __init__(
         self,
         settings: Settings,
@@ -47,27 +50,24 @@ class SettingsDialog(QDialog):
         self.setWindowTitle(self.tr("Settings"))
 
         self.model_dir_edit = QLineEdit(self)
-        browse_button = QPushButton(self.tr("Browse…"), self)
-        browse_button.clicked.connect(self._choose_model_dir)
+        self.browse_button = QPushButton(self.tr("Browse…"), self)
+        self.browse_button.clicked.connect(self._choose_model_dir)
 
         model_row = QHBoxLayout()
         model_row.addWidget(self.model_dir_edit)
-        model_row.addWidget(browse_button)
+        model_row.addWidget(self.browse_button)
 
         self.language_combo = QComboBox(self)
-        for value, label in (
-            ("system", self.tr("System")),
-            ("en", self.tr("English")),
-            ("fr", self.tr("Français")),
-        ):
-            self.language_combo.addItem(label, value)
 
-        clear_button = QPushButton(self.tr("Clear cache"), self)
-        clear_button.clicked.connect(self._clear_cache)
+        self.clear_button = QPushButton(self.tr("Clear cache"), self)
+        self.clear_button.clicked.connect(self._clear_cache)
 
-        form = QFormLayout()
-        form.addRow(self.tr("Model folder"), model_row)
-        form.addRow(self.tr("Language"), self.language_combo)
+        self._model_folder_label = QLabel(self.tr("Model folder"), self)
+        self._language_label = QLabel(self.tr("Language"), self)
+
+        self._form = QFormLayout()
+        self._form.addRow(self._model_folder_label, model_row)
+        self._form.addRow(self._language_label, self.language_combo)
 
         self._message_label = QLabel("", self)
 
@@ -80,18 +80,41 @@ class SettingsDialog(QDialog):
         buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout(self)
-        layout.addLayout(form)
-        layout.addWidget(clear_button)
+        layout.addLayout(self._form)
+        layout.addWidget(self.clear_button)
         layout.addWidget(self._message_label)
         layout.addWidget(buttons)
 
+        self._populate_languages()
         self._load()
 
     # -- population -------------------------------------------------------
 
+    def _populate_languages(self) -> None:
+        """Fill the language combo with freshly translated labels."""
+        self.language_combo.clear()
+        for value, label in (
+            ("system", self.tr("System")),
+            ("en", self.tr("English")),
+            ("fr", self.tr("Français")),
+        ):
+            self.language_combo.addItem(label, value)
+
     def _load(self) -> None:
         self.model_dir_edit.setText(self._settings.model_dir)
         index = self.language_combo.findData(self._settings.language)
+        self.language_combo.setCurrentIndex(index if index >= 0 else 0)
+
+    def retranslate_ui(self) -> None:
+        """Reapply every translated string after a language change."""
+        current = self.language_combo.currentData()
+        self.setWindowTitle(self.tr("Settings"))
+        self._model_folder_label.setText(self.tr("Model folder"))
+        self._language_label.setText(self.tr("Language"))
+        self.browse_button.setText(self.tr("Browse…"))
+        self.clear_button.setText(self.tr("Clear cache"))
+        self._populate_languages()
+        index = self.language_combo.findData(current)
         self.language_combo.setCurrentIndex(index if index >= 0 else 0)
 
     # -- actions ----------------------------------------------------------
@@ -140,9 +163,13 @@ class SettingsDialog(QDialog):
     # -- QDialog ----------------------------------------------------------
 
     def accept(self) -> None:
+        previous = self._settings.language
         self._settings.model_dir = self.model_dir_edit.text().strip()
-        self._settings.language = self.language_combo.currentData()
+        language = self.language_combo.currentData()
+        self._settings.language = language
         self._settings.sync()
+        if language != previous:
+            self.languageChanged.emit(language)
         super().accept()
 
     def reject(self) -> None:

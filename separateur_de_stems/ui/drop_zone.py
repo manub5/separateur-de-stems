@@ -48,8 +48,12 @@ class DropZone(QFrame):
     def set_file(self, path: str | None) -> None:
         """Memorise ``path`` and refresh the label (filename or prompt)."""
         self._current_file = path
-        if path:
-            name = os.path.basename(path)
+        self.retranslate_ui()
+
+    def retranslate_ui(self) -> None:
+        """Reapply the label after a language change, honouring the state."""
+        if self._current_file:
+            name = os.path.basename(self._current_file)
             self.label.setText(self.tr("Selected file: {name}").format(name=name))
         else:
             self.label.setText(self.tr("Drop an audio file here"))
