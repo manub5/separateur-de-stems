@@ -5,7 +5,7 @@ from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_submodules
 
-ROOT = Path(SPECPATH).parent.parent
+ROOT = Path(SPECPATH).parent
 APP_NAME = "StemSeparator"
 
 datas = []
