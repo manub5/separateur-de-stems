@@ -11,6 +11,8 @@ sub-directory, exporting a 24-bit WAV and a 320 kb/s MP3 for every stem.
 """
 
 import os
+import shutil
+import tempfile
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, Qt
@@ -36,6 +38,7 @@ from separateur_de_stems.core.naming import sanitize, stem_filename
 from separateur_de_stems.ui import i18n
 from separateur_de_stems.ui.drop_zone import DropZone
 from separateur_de_stems.ui.paths import default_model_dir, default_output_dir
+from separateur_de_stems.ui.run_context import RunContext
 from separateur_de_stems.ui.settings import Settings
 from separateur_de_stems.ui.settings_dialog import SettingsDialog
 from separateur_de_stems.ui.worker import SeparationWorker
@@ -56,8 +59,9 @@ class MainWindow(QMainWindow):
         self._input_path: str | None = None
         self._running = False
         self._exporting = False
-        self._run_stems: set[str] | None = None
-        self._pre_run_files: set[str] | None = None
+        self._run_context: RunContext | None = None
+        self._terminal_received = False
+        self._close_pending = False
 
         self.setWindowTitle(self.tr("Stem Separator"))
         self._build_menu()
@@ -155,6 +159,8 @@ class MainWindow(QMainWindow):
 
     def open_file(self, path: str) -> None:
         """Validate ``path`` and memorise it without reading the audio."""
+        if self._running:
+            return
         if not self._is_supported(path):
             self._log(self.tr("Unsupported file: {name}").format(
                 name=os.path.basename(path)
@@ -186,18 +192,32 @@ class MainWindow(QMainWindow):
         if not input_path or not stems or not output_dir:
             return
 
+        model_dir = self._settings.model_dir.strip() or default_model_dir()
+        error = self._validate_run_paths(input_path, output_dir, model_dir)
+        if error:
+            self.on_failed(error)
+            return
+
         self._settings.output_dir = output_dir
 
-        self._run_stems = set(stems)
-        self._pre_run_files = self._snapshot_files(output_dir)
+        workspace = tempfile.mkdtemp(prefix="stem-separator-")
+        self._run_context = RunContext(
+            input_path=input_path,
+            output_dir=output_dir,
+            model_dir=model_dir,
+            stems=frozenset(stems),
+            workspace=workspace,
+        )
+        self._terminal_received = False
 
         worker = self._worker_factory(
-            input_path, stems, output_dir, default_model_dir()
+            input_path, stems, workspace, model_dir
         )
         worker.progress.connect(self.on_progress)
-        worker.finished.connect(self.on_finished)
+        worker.completed.connect(self.on_finished)
         worker.failed.connect(self.on_failed)
         worker.cancelled.connect(self.on_cancelled)
+        worker.finished.connect(self._on_thread_finished)
 
         self._worker = worker
         self._set_running_state(True)
@@ -232,25 +252,30 @@ class MainWindow(QMainWindow):
             return
 
         self._set_exporting_state(False)
-        self._set_running_state(False)
+        self._terminal_received = True
         self.progress_bar.setValue(100)
         self.status_label.setText(self.tr("Done"))
         for path in exported:
             self._log(path)
-        self._offer_open_folder(
-            self.output_edit.text().strip()
-        )
+        context = self._run_context
+        if context is not None:
+            self._offer_open_folder(context.output_dir)
+        if self._worker is None:
+            self._on_thread_finished()
 
     def on_failed(self, message: str) -> None:
-        self._set_running_state(False)
+        self._terminal_received = True
         self.status_label.setText(self.tr("Failed"))
         self._log(self.tr("Error: {message}").format(message=message))
+        if self._worker is None:
+            self._on_thread_finished()
 
     def on_cancelled(self) -> None:
-        self._cleanup_run_partials()
-        self._set_running_state(False)
+        self._terminal_received = True
         self.status_label.setText(self.tr("Cancelled"))
         self._log(self.tr("Cancelled"))
+        if self._worker is None:
+            self._on_thread_finished()
 
     def open_settings(self) -> None:
         """Open the settings dialog and persist accepted values.
@@ -258,6 +283,8 @@ class MainWindow(QMainWindow):
         A language change is applied live through ``apply_language`` so the
         window, menus and dialogs switch without a restart.
         """
+        if self._running:
+            return
         dialog = SettingsDialog(self._settings, parent=self)
         dialog.languageChanged.connect(self.apply_language)
         dialog.exec()
@@ -331,26 +358,30 @@ class MainWindow(QMainWindow):
     # -- export -----------------------------------------------------------
 
     def _export_outputs(self, outputs: dict) -> list[str]:
-        input_path = self._input_path
-        if not input_path:
-            return []
-        output_dir = self.output_edit.text().strip()
+        context = self._run_context
+        if context is None:
+            raise RuntimeError(self.tr("No active run context"))
+        input_path = context.input_path
+        output_dir = context.output_dir
         song = os.path.splitext(os.path.basename(input_path))[0]
         song_dir = os.path.join(output_dir, sanitize(song))
 
-        requested = (
-            self._run_stems
-            if self._run_stems is not None
-            else self.selected_stems()
-        )
+        requested = context.stems
+        if not outputs:
+            raise RuntimeError(self.tr("Separation returned no outputs"))
+        missing = requested - outputs.keys()
+        if missing:
+            raise RuntimeError(
+                self.tr("Missing outputs: {stems}").format(
+                    stems=", ".join(sorted(missing))
+                )
+            )
 
         exported: list[str] = []
-        intermediates: list[str] = []
-        for stem in sorted(requested & outputs.keys()):
+        for stem in sorted(requested):
             source = outputs[stem]
             if not Path(source).is_file():
                 raise FileNotFoundError(source)
-            intermediates.append(source)
             wav_path = stem_filename(input_path, stem, "wav", song_dir)
             to_wav24(source, wav_path)
             exported.append(wav_path)
@@ -358,71 +389,7 @@ class MainWindow(QMainWindow):
             to_mp3_320(wav_path, mp3_path)
             exported.append(mp3_path)
 
-        self._remove_intermediates(intermediates, exported, output_dir)
         return exported
-
-    @staticmethod
-    def _remove_intermediates(
-        intermediates: list[str], exported: list[str], output_dir: str
-    ) -> None:
-        """Delete unexported intermediates that live under ``output_dir``.
-
-        A file outside the output folder is never touched, so a caller-chosen
-        engine output location or a user file is preserved.
-        """
-        protected = {str(Path(path).resolve()) for path in exported}
-        try:
-            root = Path(output_dir).resolve()
-        except OSError:
-            return
-        for path in intermediates:
-            try:
-                link = Path(path)
-                resolved = link.resolve()
-                if resolved in protected:
-                    continue
-                if not resolved.is_relative_to(root):
-                    continue
-                link.unlink()
-            except OSError:
-                pass
-
-    def _cleanup_run_partials(self) -> None:
-        """Best-effort removal of files created by the current run.
-
-        Only files under the output folder that did not exist when the run
-        started are removed, so pre-existing user files are never deleted.
-        """
-        if self._pre_run_files is None:
-            return
-        output_dir = self.output_edit.text().strip()
-        if not output_dir:
-            return
-        for path in self._snapshot_files(output_dir) - self._pre_run_files:
-            try:
-                Path(path).unlink()
-            except OSError:
-                pass
-        self._pre_run_files = None
-
-    @staticmethod
-    def _snapshot_files(output_dir: str) -> set[str]:
-        """Absolute paths of every file currently under ``output_dir``.
-
-        Symlinks are recorded as links (not resolved) so a later cleanup
-        unlinks the link itself and never its target.
-        """
-        root = Path(output_dir)
-        if not root.is_dir():
-            return set()
-        files: set[str] = set()
-        try:
-            for candidate in root.rglob("*"):
-                if candidate.is_file():
-                    files.add(str(candidate.absolute()))
-        except OSError:
-            return files
-        return files
 
     # -- helpers ----------------------------------------------------------
 
@@ -501,13 +468,65 @@ class MainWindow(QMainWindow):
         self._running = running
         self._set_button_label()
         self.drop_zone.setEnabled(not running)
+        self.open_button.setEnabled(not running)
+        self._open_action.setEnabled(not running)
         self.output_edit.setEnabled(not running)
+        self.choose_button.setEnabled(not running)
+        self._settings_action.setEnabled(not running)
         for checkbox in self.stem_checkboxes.values():
             checkbox.setEnabled(not running)
         # Keep the worker reference: the QThread is still unwinding ``run()``
         # when it emits its terminal signal, so dropping it here could destroy
         # a live thread. It is replaced on the next ``start_separation``.
         self._update_controls()
+
+    def _on_thread_finished(self) -> None:
+        worker = self._worker
+        if worker is not None and not self._terminal_received:
+            self._terminal_received = True
+            self.status_label.setText(self.tr("Failed"))
+            self._log(self.tr("Error: worker stopped without a terminal result"))
+        self._cleanup_workspace()
+        self._worker = None
+        self._run_context = None
+        self._set_running_state(False)
+        if worker is not None:
+            worker.deleteLater()
+        if self._close_pending:
+            self._close_pending = False
+            self.close()
+
+    def _cleanup_workspace(self) -> None:
+        context = self._run_context
+        if context is not None:
+            shutil.rmtree(context.workspace, ignore_errors=True)
+
+    @staticmethod
+    def _validate_run_paths(
+        input_path: str, output_dir: str, model_dir: str
+    ) -> str | None:
+        source = Path(input_path)
+        if not source.is_file() or not os.access(source, os.R_OK):
+            return f"Input file is not readable: {input_path}"
+        destination = Path(output_dir)
+        try:
+            destination.mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            return f"Output folder cannot be created: {error}"
+        if not destination.is_dir() or not os.access(destination, os.W_OK):
+            return f"Output folder is not writable: {output_dir}"
+        models = Path(model_dir)
+        if not models.is_dir() or not os.access(models, os.R_OK):
+            return f"Model folder is not readable: {model_dir}"
+        return None
+
+    def closeEvent(self, event) -> None:
+        if self._worker is not None:
+            self._close_pending = True
+            self.cancel_separation()
+            event.ignore()
+            return
+        event.accept()
 
     def _update_controls(self) -> None:
         if self._exporting:

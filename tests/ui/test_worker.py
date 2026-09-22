@@ -93,12 +93,12 @@ class BlockingSep(FakeSep):
         return None
 
 
-def test_worker_emits_finished(qtbot):
+def test_worker_emits_completed(qtbot):
     factory = RetainedFactory(FakeSep)
     worker = SeparationWorker(
         "in.wav", {"vocals"}, "/out", "models", separator_factory=factory
     )
-    with qtbot.waitSignal(worker.finished, timeout=3000) as signal:
+    with qtbot.waitSignal(worker.completed, timeout=3000) as signal:
         worker.start()
     assert signal.args[0] == {"vocals": "/tmp/v.wav"}
 
@@ -176,7 +176,7 @@ def test_factory_receives_model_and_output_dir(qtbot):
     worker = SeparationWorker(
         "in.wav", {"vocals"}, "/some/out", "/some/models", separator_factory=factory
     )
-    with qtbot.waitSignal(worker.finished, timeout=3000):
+    with qtbot.waitSignal(worker.completed, timeout=3000):
         worker.start()
     kwargs = factory.factory_kwargs
     assert kwargs["engine_kwargs"]["model_dir"] == "/some/models"
@@ -235,7 +235,7 @@ def test_worker_closes_its_own_progress_queue(qtbot):
         worker = SeparationWorker(
             "in.wav", {"vocals"}, "/out", "models", separator_factory=factory
         )
-        with qtbot.waitSignal(worker.finished, timeout=3000):
+        with qtbot.waitSignal(worker.completed, timeout=3000):
             worker.start()
     finally:
         worker_module._create_progress_queue = original
@@ -300,3 +300,33 @@ def test_system_exit_is_not_converted_to_failed(qtbot):
     assert runner.is_alive() is False
     assert escaped == [3]
     assert failed == []
+
+
+def test_request_cancel_does_not_call_separator_from_caller_thread(qtbot):
+    factory = RetainedFactory(BlockingSep)
+    worker = SeparationWorker(
+        "in.wav", {"vocals"}, "/out", "models", separator_factory=factory
+    )
+    requester_threads = []
+    cancel_threads = []
+
+    def record_cancel():
+        cancel_threads.append(threading.get_ident())
+        factory.last().cancelled = True
+
+    def request_when_started():
+        assert _wait_for(lambda: factory.last() is not None and factory.last().started)
+        factory.last().cancel = record_cancel
+        requester_threads.append(threading.get_ident())
+        worker.request_cancel()
+
+    timer = threading.Thread(target=request_when_started)
+    timer.start()
+    try:
+        with qtbot.waitSignal(worker.cancelled, timeout=3000):
+            worker.start()
+    finally:
+        timer.join(timeout=3)
+
+    assert cancel_threads
+    assert cancel_threads != requester_threads

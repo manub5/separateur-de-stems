@@ -27,13 +27,13 @@ class SeparationWorker(QThread):
 
     Signals:
         progress: ``(percent, message)`` updates reported by the runner.
-        finished: the raw ``{stem: path}`` mapping on success.
+        completed: the raw ``{stem: path}`` mapping on success.
         failed: a human-readable error message.
         cancelled: emitted instead of ``finished``/``failed`` on cancel.
     """
 
     progress = Signal(int, str)
-    finished = Signal(dict)
+    completed = Signal(dict)
     failed = Signal(str)
     cancelled = Signal()
 
@@ -60,20 +60,10 @@ class SeparationWorker(QThread):
 
         self._cancel_requested = threading.Event()
         self._separator = None
-        self._lock = threading.Lock()
 
     def request_cancel(self) -> None:
-        """Ask for cancellation from any thread; safe to call repeatedly."""
+        """Record cancellation without calling potentially blocking process code."""
         self._cancel_requested.set()
-        with self._lock:
-            separator = self._separator
-        if separator is not None:
-            cancel = getattr(separator, "cancel", None)
-            if cancel is not None:
-                try:
-                    cancel()
-                except Exception:  # noqa: BLE001
-                    pass
 
     def run(self) -> None:
         """Thread body: normal errors become ``failed``, nothing escapes."""
@@ -106,8 +96,7 @@ class SeparationWorker(QThread):
             return
 
         separator = self._build_separator()
-        with self._lock:
-            self._separator = separator
+        self._separator = separator
 
         separator.start(self._input_path, self._stems)
 
@@ -125,7 +114,7 @@ class SeparationWorker(QThread):
             elif status == "error":
                 self.failed.emit(str(payload))
             else:
-                self.finished.emit(dict(payload or {}))
+                self.completed.emit(dict(payload or {}))
             return
 
     def _build_separator(self):
