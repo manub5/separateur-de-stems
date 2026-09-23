@@ -14,12 +14,13 @@ from separateur_de_stems.core.bundle_manifest import (
 _BINARY_FIELDS = {"name", "licence", "source", "version", "licence_status"}
 _BINARY_NAMES = {"ffmpeg", "ffprobe"}
 _LICENCE_STATUSES = {"distributable", "not-distributable", "unknown"}
+_EXACT_VERSION = r"[A-Za-z0-9][A-Za-z0-9._+-]*"
 _REQUIREMENT = re.compile(
-    r"(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)==(?P<version>[^\s;@=]+)"
+    rf"(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)==(?P<version>{_EXACT_VERSION})"
     r"(?P<hashes>(?:\s+--hash=sha256:[0-9a-f]{64})+)"
 )
 _DIRECT_REQUIREMENT = re.compile(
-    r"(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)==(?P<version>[^\s;@=]+)"
+    rf"(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)==(?P<version>{_EXACT_VERSION})"
 )
 _MALFORMED_HASH_REQUIREMENT = re.compile(
     r"(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)==[^\s;@=]+"
