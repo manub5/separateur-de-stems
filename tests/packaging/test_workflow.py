@@ -141,8 +141,28 @@ def test_tag_installs_only_validated_transitive_lock_with_hashes():
 
 def test_workflow_validates_binary_architecture_smokes_and_hashes_artifact():
     text = _workflow_text()
-    assert "file $(command -v ffmpeg)" in text
-    assert "ffprobe -version" in text
+    assert "--platform darwin" in text
+    assert "otool -L" in text
     assert "-m scripts.smoke_bundle" in text
     assert "shasum -a 256" in text
     assert "du -h" in text
+
+
+def test_workflow_validates_source_and_bundled_dependencies_before_archive():
+    steps = _load()["jobs"]["build"]["steps"]
+    archive_index = next(i for i, step in enumerate(steps) if step.get("name") == "Package the .app as a zip")
+    validation_steps = [
+        (i, step) for i, step in enumerate(steps)
+        if "validate_release" in step.get("run", "") and "--ffmpeg" in step.get("run", "")
+    ]
+    assert len(validation_steps) >= 2
+    assert all(i < archive_index for i, _ in validation_steps)
+    assert any("StemSeparator.app" in step["run"] for _, step in validation_steps)
+    assert all("otool" in step["run"] or "--platform darwin" in step["run"] for _, step in validation_steps)
+
+
+def test_workflow_verifies_archive_checksum_before_upload():
+    steps = _load()["jobs"]["build"]["steps"]
+    upload_index = next(i for i, step in enumerate(steps) if step.get("name") == "Upload the macOS artifact")
+    checksum_index = next(i for i, step in enumerate(steps) if "shasum -a 256 -c" in step.get("run", ""))
+    assert checksum_index < upload_index

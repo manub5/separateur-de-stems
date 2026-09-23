@@ -72,8 +72,8 @@ workflow macOS est `.github/workflows/build-macos.yml`.
 **PUBLICATION BLOQUÉE.** Le bundle de publication vise un fonctionnement hors ligne.
 Son gate vérifie les actifs déclarés, leurs configurations,
 `download_checks.json`, ffmpeg et ffprobe avant le build. Le manifeste est
-incomplet : les poids Demucs `.th` nécessaires ne sont ni présents ni tous
-inventoriés, et d'autres poids, configurations, tailles, SHA-256, sources ou
+incomplet : le manifeste versionné n'inventorie aucun poids Demucs `.th`, et
+d'autres poids, configurations, tailles, SHA-256, sources ou
 licences manquent. Les licences, sources et versions des binaires restent
 inconnues dans `packaging/redistributed-binaries.json`. Enfin,
 `requirements/macos-arm64.lock` n'est qu'un inventaire direct épinglé : le vrai
@@ -155,7 +155,7 @@ workflow is `.github/workflows/build-macos.yml`.
 **PUBLIC RELEASE BLOCKED.** The release bundle targets offline operation. Its
 gate verifies declared assets, their configs, `download_checks.json`, ffmpeg,
 and ffprobe before building. The manifest is incomplete: required Demucs
-weights in `.th` files are neither present nor all inventoried, and other
+weights in `.th` files are not inventoried in the versioned manifest, and other
 payloads, configs, sizes, SHA-256 hashes, sources, or licences are missing. The
 licences, sources, and versions of redistributed binaries remain unknown in
 `packaging/redistributed-binaries.json`. Finally,

@@ -141,8 +141,11 @@ Python installés sur la machine cible, tout en gardant un bundle raisonnable.
 
 Raison : les poids et licences de la sélection ne sont pas tous disponibles ou
 résolus. `models/manifest.json` inventorie donc chaque nom sélectionné et marque
-explicitement les champs inconnus. La spec PyInstaller refuse le build avant
-l'analyse tant qu'un actif, une configuration, une taille, un SHA-256, une
+explicitement les champs inconnus. Chaque fichier redistribué est un objet
+`assets` avec chemin, taille et SHA-256 ; les références des modèles doivent
+couvrir exactement cet inventaire, et chaque modèle Demucs doit référencer au
+moins un poids `.th`. La spec PyInstaller refuse le build avant l'analyse tant
+qu'un actif, une configuration, une taille, un SHA-256, une
 source ou un statut de licence distribuable manque. En développement, le chemin
 `models/` et les overrides utilisateur restent disponibles ; un exécutable figé
 n'utilise `_MEIPASS/models` par défaut qu'après validation complète du manifeste.
@@ -152,8 +155,12 @@ Le workflow macOS utilise l'inventaire direct
 `requirements/macos-arm64.lock`, vérifie les outils multimédia arm64, puis
 inspecte le bundle et encode un signal synthétique avec un `PATH` vide. Pour un
 tag, `scripts.validate_release` exige en plus les licences redistribuables de
-ffmpeg/ffprobe et un futur `requirements/macos-arm64-transitive.lock` avec de
-vrais hashes, généré et validé sur macOS arm64. Aucun hash ni lock transitif
+ffmpeg/ffprobe. Leur manifeste est lié aux fichiers réels par SHA-256, version,
+architecture et politique de dépendances. Sur macOS, `otool -L` n'autorise que
+les bibliothèques système et les références internes relocalisables ; une
+plateforme d'inspection inconnue bloque. Le gate exige aussi un futur
+`requirements/macos-arm64-transitive.lock` avec de vrais hashes, généré et
+validé sur macOS arm64. Aucun hash ni lock transitif
 n'est fabriqué depuis Linux ; l'upload tag reste bloqué jusque-là.
 
 Le validateur du futur lock accepte uniquement une exigence `nom==version` par

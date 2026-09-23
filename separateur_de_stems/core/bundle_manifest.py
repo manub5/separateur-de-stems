@@ -18,6 +18,10 @@ class BundleManifestError(PackagingError):
     pass
 
 
+class FrozenBundleError(PackagingError):
+    """A frozen application has no usable bundled model set."""
+
+
 def validate_model_bundle(model_dir, *, require_distributable=False):
     root = Path(model_dir)
     manifest_path = root / "manifest.json"
@@ -28,14 +32,27 @@ def validate_model_bundle(model_dir, *, require_distributable=False):
     except (OSError, json.JSONDecodeError) as error:
         raise BundleManifestError(f"Model manifest is missing or invalid: {error}") from error
 
-    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1 or not isinstance(manifest.get("models"), list):
+    if not isinstance(manifest, dict) or set(manifest) != {"schema_version", "models", "assets"}:
+        raise BundleManifestError("Model manifest has an unsupported schema")
+    if manifest["schema_version"] != 2 or not isinstance(manifest["models"], list) or not isinstance(manifest["assets"], list):
         raise BundleManifestError("Model manifest has an unsupported schema")
 
-    required_files = manifest.get("required_files")
-    if not isinstance(required_files, list) or not all(isinstance(item, str) and item for item in required_files):
-        raise BundleManifestError("required_files must be a list of non-empty strings")
-    if "download_checks.json" not in required_files:
-        raise BundleManifestError("required_files must contain download_checks.json")
+    assets_by_path = {}
+    for asset in manifest["assets"]:
+        if not isinstance(asset, dict) or set(asset) != {"path", "size", "sha256"}:
+            path = asset.get("path", "asset") if isinstance(asset, dict) else "asset"
+            raise BundleManifestError(f"Asset {path} must define path, size and sha256")
+        path = asset["path"]
+        _validate_relative_path(path)
+        if path in assets_by_path:
+            raise BundleManifestError(f"Model manifest contains duplicate asset path: {path}")
+        if not isinstance(asset["size"], int) or isinstance(asset["size"], bool) or asset["size"] <= 0:
+            raise BundleManifestError(f"Asset {path} size must be a positive integer")
+        if not isinstance(asset["sha256"], str) or not _SHA256.fullmatch(asset["sha256"]):
+            raise BundleManifestError(f"Asset {path} sha256 must be 64 lowercase hex characters")
+        assets_by_path[path] = asset
+    if "download_checks.json" not in assets_by_path:
+        raise BundleManifestError("Asset metadata for download_checks.json is required")
 
     if not all(isinstance(entry, dict) for entry in manifest["models"]):
         raise BundleManifestError("models must contain objects")
@@ -50,35 +67,40 @@ def validate_model_bundle(model_dir, *, require_distributable=False):
     assets = []
     for entry in manifest["models"]:
         filename = entry["filename"]
-        config_files = entry.get("config_files")
-        if not isinstance(config_files, list) or not all(isinstance(item, str) and item for item in config_files):
-            raise BundleManifestError(f"Model {filename} config_files must be a list of strings")
-        if not isinstance(entry.get("sha256"), str) or not _SHA256.fullmatch(entry["sha256"]):
-            raise BundleManifestError(f"Model {filename} sha256 must be 64 lowercase hex characters")
-        if not isinstance(entry.get("size"), int) or isinstance(entry["size"], bool) or entry["size"] <= 0:
-            raise BundleManifestError(f"Model {filename} size must be a positive integer")
+        asset_paths = entry.get("asset_paths")
+        if not isinstance(asset_paths, list) or not asset_paths or not all(isinstance(item, str) and item for item in asset_paths):
+            raise BundleManifestError(f"Model {filename} asset_paths must be a non-empty list of strings")
+        if len(asset_paths) != len(set(asset_paths)):
+            raise BundleManifestError(f"Model {filename} contains duplicate asset paths")
+        for path in asset_paths:
+            _validate_relative_path(path)
+        if filename not in asset_paths:
+            raise BundleManifestError(f"Model {filename} must reference its selected model file")
+        if filename.endswith(".yaml") and not any(path.endswith(".th") for path in asset_paths):
+            raise BundleManifestError(f"Demucs model {filename} must inventory at least one .th weight")
         for field in ("source", "licence", "licence_status"):
             if not isinstance(entry.get(field), str) or not entry[field]:
                 raise BundleManifestError(f"Model {filename} has unknown field: {field}")
         if require_distributable and entry["licence_status"] != "distributable":
             raise BundleManifestError(f"Model {entry['filename']} is not distributable")
 
-        payload = _asset_path(root, entry["filename"])
-        _require_file(payload)
-        if payload.stat().st_size != entry["size"]:
-            raise BundleManifestError(f"Size mismatch for {entry['filename']}")
-        digest = _sha256(payload)
-        if digest != entry["sha256"]:
-            raise BundleManifestError(f"SHA-256 mismatch for {entry['filename']}")
-        assets.append(payload)
-        for config in config_files:
-            config_path = _asset_path(root, config)
-            _require_file(config_path)
-            assets.append(config_path)
+    referenced = {"download_checks.json"}
+    for entry in manifest["models"]:
+        referenced.update(entry["asset_paths"])
+    unreferenced = set(assets_by_path) - referenced
+    missing_metadata = referenced - set(assets_by_path)
+    if unreferenced:
+        raise BundleManifestError(f"Manifest assets are not referenced: {', '.join(sorted(unreferenced))}")
+    if missing_metadata:
+        raise BundleManifestError(f"Referenced assets lack metadata: {', '.join(sorted(missing_metadata))}")
 
-    for filename in required_files:
+    for filename, metadata in assets_by_path.items():
         required_path = _asset_path(root, filename)
         _require_file(required_path)
+        if required_path.stat().st_size != metadata["size"]:
+            raise BundleManifestError(f"Size mismatch for {filename}")
+        if _sha256(required_path) != metadata["sha256"]:
+            raise BundleManifestError(f"SHA-256 mismatch for {filename}")
         assets.append(required_path)
     assets.append(manifest_path)
     return assets
@@ -86,9 +108,19 @@ def validate_model_bundle(model_dir, *, require_distributable=False):
 
 def _asset_path(root: Path, filename: str) -> Path:
     candidate = root / filename
-    if candidate.parent.resolve() != root.resolve():
+    try:
+        candidate.resolve().relative_to(root.resolve())
+    except ValueError:
         raise BundleManifestError(f"Manifest asset escapes model directory: {filename}")
     return candidate
+
+
+def _validate_relative_path(filename) -> None:
+    if not isinstance(filename, str) or not filename:
+        raise BundleManifestError("Manifest asset path must be a non-empty relative string")
+    path = Path(filename)
+    if path.is_absolute() or ".." in path.parts:
+        raise BundleManifestError(f"Manifest asset path escapes model directory: {filename}")
 
 
 def _require_file(path: Path) -> None:

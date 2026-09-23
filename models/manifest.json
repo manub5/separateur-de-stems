@@ -1,48 +1,46 @@
 {
-  "schema_version": 1,
-  "required_files": ["download_checks.json"],
+  "schema_version": 2,
+  "assets": [
+    {"path": "download_checks.json", "size": null, "sha256": null},
+    {"path": "vocals_mel_band_roformer.ckpt", "size": null, "sha256": null},
+    {"path": "model_bs_roformer_ep_317_sdr_12.9755.ckpt", "size": null, "sha256": null},
+    {"path": "model_bs_roformer_ep_317_sdr_12.9755.yaml", "size": null, "sha256": null},
+    {"path": "htdemucs_ft.yaml", "size": null, "sha256": null},
+    {"path": "hdemucs_mmi.yaml", "size": null, "sha256": null},
+    {"path": "htdemucs_6s.yaml", "size": null, "sha256": null}
+  ],
   "models": [
     {
       "filename": "vocals_mel_band_roformer.ckpt",
-      "config_files": [],
-      "sha256": null,
-      "size": null,
+      "asset_paths": ["vocals_mel_band_roformer.ckpt"],
       "source": null,
       "licence": null,
       "licence_status": "unknown"
     },
     {
       "filename": "model_bs_roformer_ep_317_sdr_12.9755.ckpt",
-      "config_files": ["model_bs_roformer_ep_317_sdr_12.9755.yaml"],
-      "sha256": null,
-      "size": null,
+      "asset_paths": ["model_bs_roformer_ep_317_sdr_12.9755.ckpt", "model_bs_roformer_ep_317_sdr_12.9755.yaml"],
       "source": "https://github.com/TRvlvr/model_repo/releases/download/all_public_uvr_models/model_bs_roformer_ep_317_sdr_12.9755.ckpt",
       "licence": null,
       "licence_status": "unknown"
     },
     {
       "filename": "htdemucs_ft.yaml",
-      "config_files": [],
-      "sha256": null,
-      "size": null,
+      "asset_paths": ["htdemucs_ft.yaml"],
       "source": "https://github.com/TRvlvr/model_repo/releases/download/all_public_uvr_models/htdemucs_ft.yaml",
       "licence": null,
       "licence_status": "unknown"
     },
     {
       "filename": "hdemucs_mmi.yaml",
-      "config_files": [],
-      "sha256": null,
-      "size": null,
+      "asset_paths": ["hdemucs_mmi.yaml"],
       "source": "https://github.com/TRvlvr/model_repo/releases/download/all_public_uvr_models/hdemucs_mmi.yaml",
       "licence": null,
       "licence_status": "unknown"
     },
     {
       "filename": "htdemucs_6s.yaml",
-      "config_files": [],
-      "sha256": null,
-      "size": null,
+      "asset_paths": ["htdemucs_6s.yaml"],
       "source": "https://github.com/TRvlvr/model_repo/releases/download/all_public_uvr_models/htdemucs_6s.yaml",
       "licence": null,
       "licence_status": "unknown"

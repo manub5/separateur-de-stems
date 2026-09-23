@@ -1,8 +1,11 @@
 """Strict checks shared by PyInstaller and packaging smoke scripts."""
 
-import os
+import hashlib
 import json
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 from separateur_de_stems.core.bundle_manifest import (
@@ -11,9 +14,14 @@ from separateur_de_stems.core.bundle_manifest import (
     validate_model_bundle,
 )
 
-_BINARY_FIELDS = {"name", "licence", "source", "version", "licence_status"}
+_BINARY_FIELDS = {
+    "name", "licence", "source", "version", "licence_status",
+    "architecture", "sha256", "dependency_policy",
+}
 _BINARY_NAMES = {"ffmpeg", "ffprobe"}
 _LICENCE_STATUSES = {"distributable", "not-distributable", "unknown"}
+_DEPENDENCY_POLICIES = {"static", "system-only"}
+_SHA256 = re.compile(r"[0-9a-f]{64}")
 _EXACT_VERSION = r"[A-Za-z0-9][A-Za-z0-9._+-]*"
 _REQUIREMENT = re.compile(
     rf"(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)==(?P<version>{_EXACT_VERSION})"
@@ -39,7 +47,10 @@ def validate_build_inputs(models_dir, translations_dir, ffmpeg, ffprobe, binary_
     translation = Path(translations_dir) / "stem_separator_fr.qm"
     if not translation.is_file() or translation.stat().st_size == 0:
         raise PackagingError(f"Required non-empty translation is absent: {translation}")
-    validate_redistributed_binary_licences(binary_licences)
+    validate_redistributed_binaries(
+        binary_licences,
+        {"ffmpeg": Path(ffmpeg), "ffprobe": Path(ffprobe)},
+    )
     try:
         return validate_model_bundle(models_dir, require_distributable=True)
     except BundleManifestError as error:
@@ -80,7 +91,82 @@ def validate_redistributed_binary_licences(manifest_path):
             raise PackagingError(f"Redistributed binary {name} has an invalid licence status")
         if entry.get("licence_status") != "distributable":
             raise PackagingError(f"Redistributed binary {name} is not distributable")
+        if not _SHA256.fullmatch(entry["sha256"]):
+            raise PackagingError(f"Redistributed binary {name} has an invalid SHA-256")
+        if entry["dependency_policy"] not in _DEPENDENCY_POLICIES:
+            raise PackagingError(f"Redistributed binary {name} has an invalid dependency policy")
     return Path(manifest_path)
+
+
+def parse_otool_dependencies(output: str) -> list[str]:
+    """Extract dependency install names from ``otool -L`` output."""
+    lines = output.splitlines()
+    return [line.strip().split(" (", 1)[0] for line in lines[1:] if line.strip()]
+
+
+def validate_macos_dependencies(dependencies, binary_name, *, policy="system-only"):
+    if policy == "static" and dependencies:
+        raise PackagingError(f"Redistributed binary {binary_name} declares dependencies under static policy")
+    allowed = ("/usr/lib/", "/System/Library/", "@rpath/", "@loader_path/", "@executable_path/")
+    for dependency in dependencies:
+        if not dependency.startswith(allowed):
+            raise PackagingError(f"Redistributed binary {binary_name} has external dependency: {dependency}")
+
+
+def validate_redistributed_binaries(
+    manifest_path,
+    binaries,
+    *,
+    inspect=None,
+    platform_name=None,
+):
+    """Bind redistribution metadata to executable bytes and runtime dependencies."""
+    validate_redistributed_binary_licences(manifest_path)
+    manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+    entries = {entry["name"]: entry for entry in manifest["binaries"]}
+    platform_name = platform_name or sys.platform
+    if platform_name != "darwin":
+        raise PackagingError(f"unsupported dependency inspection platform: {platform_name}")
+
+    if inspect is None:
+        def inspect(command):
+            try:
+                completed = subprocess.run(
+                    [str(part) for part in command],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    env={"PATH": "/usr/bin:/bin"},
+                )
+            except (OSError, subprocess.CalledProcessError) as error:
+                raise PackagingError(f"Binary inspection failed for {command[0]}: {error}") from error
+            return completed.stdout
+
+    for name in sorted(_BINARY_NAMES):
+        path = Path(binaries[name])
+        if not path.is_file() or not os.access(path, os.X_OK):
+            raise PackagingError(f"Required {name} executable is absent or not executable: {path}")
+        entry = entries[name]
+        if _file_sha256(path) != entry["sha256"]:
+            raise PackagingError(f"Redistributed binary {name} SHA-256 mismatch")
+        version_output = inspect([path, "--version"])
+        version_lines = version_output.splitlines()
+        if not version_lines or entry["version"] not in version_lines[0]:
+            raise PackagingError(f"Redistributed binary {name} version mismatch")
+        architecture = inspect(["file", "-b", path])
+        if entry["architecture"] not in architecture:
+            raise PackagingError(f"Redistributed binary {name} architecture mismatch")
+        dependencies = parse_otool_dependencies(inspect(["otool", "-L", path]))
+        validate_macos_dependencies(dependencies, name, policy=entry["dependency_policy"])
+    return [Path(binaries[name]) for name in sorted(_BINARY_NAMES)]
+
+
+def _file_sha256(path):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def validate_macos_release_lock(lock_path, direct_inventory_path="requirements/macos-arm64.lock"):

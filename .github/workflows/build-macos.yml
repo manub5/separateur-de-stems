@@ -36,11 +36,10 @@ jobs:
       - name: Validate bundled media tools
         run: |
           test "$(uname -m)" = "arm64"
-          file $(command -v ffmpeg) | grep -q arm64
-          file $(command -v ffprobe) | grep -q arm64
-          ffmpeg -version
-          ffprobe -version
-          shasum -a 256 $(command -v ffmpeg) $(command -v ffprobe)
+          otool -L "$(command -v ffmpeg)"
+          otool -L "$(command -v ffprobe)"
+          python -m scripts.validate_release --binaries-only --platform darwin \
+            --ffmpeg "$(command -v ffmpeg)" --ffprobe "$(command -v ffprobe)"
 
       # On macOS arm64 the default torch/onnxruntime wheels are CPU/MPS,
       # so no CUDA extra is installed. Do NOT add a [gpu] extra here:
@@ -73,6 +72,14 @@ jobs:
           python -m scripts.smoke_bundle dist/StemSeparator.app/Contents/Frameworks
           ./dist/StemSeparator.app/Contents/MacOS/StemSeparator --help
 
+      - name: Validate media tools inside final bundle
+        run: |
+          otool -L dist/StemSeparator.app/Contents/Frameworks/ffmpeg/ffmpeg
+          otool -L dist/StemSeparator.app/Contents/Frameworks/ffmpeg/ffprobe
+          python -m scripts.validate_release --binaries-only --platform darwin \
+            --ffmpeg dist/StemSeparator.app/Contents/Frameworks/ffmpeg/ffmpeg \
+            --ffprobe dist/StemSeparator.app/Contents/Frameworks/ffmpeg/ffprobe
+
       - name: Package the .app as a zip
         working-directory: dist
         run: ditto -c -k --sequesterRsrc --keepParent StemSeparator.app StemSeparator-macos.zip
@@ -81,6 +88,10 @@ jobs:
         run: |
           du -h dist/StemSeparator-macos.zip
           shasum -a 256 dist/StemSeparator-macos.zip | tee dist/StemSeparator-macos.zip.sha256
+
+      - name: Verify archive checksum
+        working-directory: dist
+        run: shasum -a 256 -c StemSeparator-macos.zip.sha256
 
       # GitHub caps individual artifacts (currently ~2 GB zipped). If the zip
       # ever exceeds that limit, fall back to publishing the archive as a

@@ -25,11 +25,13 @@
   ligne et manifeste de modèles.
 - Task 4 terminée : README bilingue, notices, questions et état de publication
   alignés sur les comportements durcis et les blockers vérifiés.
+- Revue finale terminée : inventaire hashé exhaustif des actifs, résolution
+  frozen fail-closed et validation des vrais ffmpeg/ffprobe avant artefact
+  (hash, version, architecture et dépendances macOS).
 
 ## À faire
 
-- Task 5 uniquement : exécuter le gate qualité complet et les smokes
-  réalisables. La validation macOS arm64 dépend encore des blockers ci-dessous.
+- Valider le build et les smokes sur macOS arm64 après résolution des blockers.
 
 ## Bloqué
 

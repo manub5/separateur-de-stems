@@ -14,5 +14,6 @@ models/
 .ruff_cache/
 .worktrees/
 .superpowers/
+final-fix-report.md
 *.qm
 !separateur_de_stems/ui/i18n/*.qm

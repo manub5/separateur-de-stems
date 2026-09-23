@@ -11,9 +11,7 @@ from separateur_de_stems.core.packaging import PackagingError
 def _entry(filename, payload=b"payload", **overrides):
     entry = {
         "filename": filename,
-        "config_files": [],
-        "sha256": hashlib.sha256(payload).hexdigest(),
-        "size": len(payload),
+        "asset_paths": [filename],
         "source": "https://example.invalid/model",
         "licence": "MIT",
         "licence_status": "distributable",
@@ -22,16 +20,36 @@ def _entry(filename, payload=b"payload", **overrides):
     return entry
 
 
+def _asset(path, payload):
+    return {
+        "path": path,
+        "sha256": hashlib.sha256(payload).hexdigest(),
+        "size": len(payload),
+    }
+
+
 def _write_complete_bundle(root, *, mutate=None):
     entries = []
     for filename in sorted(set(STEM_TO_MODEL.values())):
         payload = filename.encode()
         (root / filename).write_bytes(payload)
-        entries.append(_entry(filename, payload))
-    (root / "download_checks.json").write_text("{}")
+        entry = _entry(filename, payload)
+        if filename.endswith(".yaml"):
+            weight = f"weights/{filename.removesuffix('.yaml')}.th"
+            weight_payload = weight.encode()
+            (root / "weights").mkdir(exist_ok=True)
+            (root / weight).write_bytes(weight_payload)
+            entry["asset_paths"].append(weight)
+        entries.append(entry)
+    checks = b"{}"
+    (root / "download_checks.json").write_bytes(checks)
+    assets = [_asset("download_checks.json", checks)]
+    for entry in entries:
+        for path in entry["asset_paths"]:
+            assets.append(_asset(path, (root / path).read_bytes()))
     manifest = {
-        "schema_version": 1,
-        "required_files": ["download_checks.json"],
+        "schema_version": 2,
+        "assets": assets,
         "models": entries,
     }
     if mutate:
@@ -40,8 +58,8 @@ def _write_complete_bundle(root, *, mutate=None):
     return manifest
 
 
-def test_repository_manifest_explicitly_blocks_distribution():
-    with pytest.raises(BundleManifestError, match="sha256|unknown"):
+def test_repository_manifest_blocks_on_unknown_asset_metadata():
+    with pytest.raises(BundleManifestError, match=r"download_checks\.json size"):
         validate_model_bundle("models", require_distributable=True)
 
 
@@ -63,15 +81,18 @@ def test_manifest_rejects_partial_selected_model_set(tmp_path):
         validate_model_bundle(tmp_path)
 
 
-def test_manifest_requires_download_checks_declaration(tmp_path):
-    _write_complete_bundle(tmp_path, mutate=lambda data: data["required_files"].clear())
+def test_manifest_requires_hashed_download_checks_asset(tmp_path):
+    _write_complete_bundle(
+        tmp_path,
+        mutate=lambda data: data["assets"].__setitem__(0, {"path": "download_checks.json", "size": 2}),
+    )
     with pytest.raises(BundleManifestError, match="download_checks.json"):
         validate_model_bundle(tmp_path)
 
 
 @pytest.mark.parametrize(
     ("field", "value"),
-    [("config_files", None), ("sha256", "bad"), ("size", 0), ("size", "7")],
+    [("asset_paths", None), ("source", None), ("licence", None)],
 )
 def test_manifest_rejects_invalid_model_field_types(tmp_path, field, value):
     def mutate(data):
@@ -82,19 +103,49 @@ def test_manifest_rejects_invalid_model_field_types(tmp_path, field, value):
         validate_model_bundle(tmp_path)
 
 
-def test_manifest_rejects_non_string_config_or_required_file(tmp_path):
+def test_manifest_rejects_non_string_asset_reference(tmp_path):
     _write_complete_bundle(
         tmp_path,
-        mutate=lambda data: data["models"][0].update(config_files=[1]),
+        mutate=lambda data: data["models"][0].update(asset_paths=[1]),
     )
-    with pytest.raises(BundleManifestError, match="config_files"):
+    with pytest.raises(BundleManifestError, match="asset_paths"):
         validate_model_bundle(tmp_path)
 
+
+def test_manifest_rejects_missing_declared_asset(tmp_path):
+    manifest = _write_complete_bundle(tmp_path)
+    missing = manifest["assets"][-1]["path"]
+    (tmp_path / missing).unlink()
+    with pytest.raises(BundleManifestError, match="absent"):
+        validate_model_bundle(tmp_path)
+
+
+def test_manifest_rejects_uninventoried_demucs_weight(tmp_path):
+    def mutate(data):
+        demucs = next(entry for entry in data["models"] if entry["filename"].endswith(".yaml"))
+        demucs["asset_paths"] = [demucs["filename"]]
+
+    _write_complete_bundle(tmp_path, mutate=mutate)
+    with pytest.raises(BundleManifestError, match=r"Demucs.*\.th"):
+        validate_model_bundle(tmp_path)
+
+
+@pytest.mark.parametrize("path", ["../escape", "/absolute", "nested/../../escape"])
+def test_manifest_rejects_asset_path_traversal(tmp_path, path):
     _write_complete_bundle(
         tmp_path,
-        mutate=lambda data: data.update(required_files=["download_checks.json", 1]),
+        mutate=lambda data: data["assets"][0].update(path=path),
     )
-    with pytest.raises(BundleManifestError, match="required_files"):
+    with pytest.raises(BundleManifestError, match="escapes|relative"):
+        validate_model_bundle(tmp_path)
+
+
+def test_manifest_rejects_duplicate_asset_paths(tmp_path):
+    _write_complete_bundle(
+        tmp_path,
+        mutate=lambda data: data["assets"].append(dict(data["assets"][0])),
+    )
+    with pytest.raises(BundleManifestError, match="duplicate asset"):
         validate_model_bundle(tmp_path)
 
 

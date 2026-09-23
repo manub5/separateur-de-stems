@@ -1,5 +1,6 @@
 import json
 import os
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -15,7 +16,8 @@ def _executable(path: Path, content="#!/bin/sh\nexit 0\n") -> Path:
     return path
 
 
-def _binary_manifest(path, status="distributable"):
+def _binary_manifest(path, binaries=None, status="distributable"):
+    binaries = binaries or {}
     path.write_text(json.dumps({
         "schema_version": 1,
         "binaries": [
@@ -24,12 +26,58 @@ def _binary_manifest(path, status="distributable"):
                 "licence": "LGPL-2.1-or-later",
                 "source": "https://example.invalid/ffmpeg",
                 "version": "7.1",
+                "architecture": "arm64",
+                "sha256": hashlib.sha256(binaries.get(name, b"binary")).hexdigest(),
+                "dependency_policy": "system-only",
                 "licence_status": status,
             }
             for name in ("ffmpeg", "ffprobe")
         ],
     }))
     return path
+
+
+def test_otool_parser_accepts_only_system_and_relocatable_dependencies():
+    output = """/tmp/ffmpeg:\n\t@rpath/libavcodec.dylib (compatibility version 1.0.0)\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0)\n\t/System/Library/Frameworks/CoreMedia.framework/CoreMedia (compatibility version 1.0.0)\n"""
+    assert packaging_mod.parse_otool_dependencies(output) == [
+        "@rpath/libavcodec.dylib",
+        "/usr/lib/libSystem.B.dylib",
+        "/System/Library/Frameworks/CoreMedia.framework/CoreMedia",
+    ]
+
+
+@pytest.mark.parametrize("dependency", ["/opt/homebrew/lib/libx.dylib", "/usr/local/lib/libx.dylib", "/tmp/libx.dylib"])
+def test_otool_dependency_policy_rejects_external_paths(dependency):
+    with pytest.raises(PackagingError, match="external dependency"):
+        packaging_mod.validate_macos_dependencies([dependency], "ffmpeg")
+
+
+def test_binary_validation_binds_manifest_to_real_files(tmp_path):
+    payloads = {name: f"{name}-payload".encode() for name in ("ffmpeg", "ffprobe")}
+    paths = {}
+    for name, payload in payloads.items():
+        path = tmp_path / name
+        path.write_bytes(payload)
+        path.chmod(0o755)
+        paths[name] = path
+    manifest = _binary_manifest(tmp_path / "binaries.json", payloads)
+
+    def inspect(command):
+        if command[0] == "file":
+            return "Mach-O 64-bit executable arm64"
+        if command[0] == "otool":
+            return f"{command[-1]}:\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0)\n"
+        return "ffmpeg version 7.1 Copyright"
+
+    packaging_mod.validate_redistributed_binaries(manifest, paths, inspect=inspect, platform_name="darwin")
+
+
+def test_binary_validation_fails_closed_when_dependency_inspection_is_unknown(tmp_path):
+    payloads = {name: name.encode() for name in ("ffmpeg", "ffprobe")}
+    paths = {name: _executable(tmp_path / name, payload.decode()) for name, payload in payloads.items()}
+    manifest = _binary_manifest(tmp_path / "binaries.json", payloads)
+    with pytest.raises(PackagingError, match="unsupported dependency inspection"):
+        packaging_mod.validate_redistributed_binaries(manifest, paths, inspect=lambda command: "", platform_name="linux")
 
 
 def test_build_inputs_reject_non_executable_tool(tmp_path):

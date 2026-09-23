@@ -10,6 +10,7 @@ import json
 
 import pytest
 
+from separateur_de_stems.core.bundle_manifest import FrozenBundleError
 from separateur_de_stems.core.models import STEM_TO_MODEL
 from separateur_de_stems.ui import paths
 
@@ -42,7 +43,8 @@ def test_default_cache_dir_dev():
 def test_default_model_dir_frozen_without_valid_manifest_stays_explicit(monkeypatch):
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "_MEIPASS", "/missing-bundle", raising=False)
-    assert paths.default_model_dir() == "models"
+    with pytest.raises(FrozenBundleError, match="bundled models"):
+        paths.default_model_dir()
 
 
 def test_default_model_dir_frozen_uses_complete_bundle(monkeypatch, tmp_path):
@@ -53,18 +55,29 @@ def test_default_model_dir_frozen_uses_complete_bundle(monkeypatch, tmp_path):
     for filename in sorted(set(STEM_TO_MODEL.values())):
         payload = filename.encode()
         (models / filename).write_bytes(payload)
+        asset_paths = [filename]
+        if filename.endswith(".yaml"):
+            weight = f"{filename}.th"
+            (models / weight).write_bytes(weight.encode())
+            asset_paths.append(weight)
         entries.append({
-            "filename": filename, "config_files": [],
-            "sha256": hashlib.sha256(payload).hexdigest(), "size": len(payload),
+            "filename": filename, "asset_paths": asset_paths,
             "source": "https://example.invalid/model", "licence": "MIT",
             "licence_status": "distributable"
         })
+    checks = b"{}"
+    assets = []
+    for entry in entries:
+        for asset_path in entry["asset_paths"]:
+            payload = (models / asset_path).read_bytes()
+            assets.append({"path": asset_path, "sha256": hashlib.sha256(payload).hexdigest(), "size": len(payload)})
+    assets.append({"path": "download_checks.json", "sha256": hashlib.sha256(checks).hexdigest(), "size": len(checks)})
     manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
         "models": entries,
-        "required_files": ["download_checks.json"]
+        "assets": assets,
     }
-    (models / "download_checks.json").write_text("{}")
+    (models / "download_checks.json").write_bytes(checks)
     (models / "manifest.json").write_text(json.dumps(manifest))
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)

@@ -9,15 +9,15 @@
 | guitar | `htdemucs_6s.yaml` | Demucs | non fourni | inconnue | URL consignée dans le manifeste | inconnue |
 | piano | `htdemucs_6s.yaml` | Demucs | non fourni | inconnue | URL consignée dans le manifeste | inconnue |
 
-État local vérifié : `models/` contient uniquement `manifest.json` et
-`download_checks.json`; aucun poids sélectionné n'est présent. Le manifeste
-exige en plus la configuration
-`model_bs_roformer_ep_317_sdr_12.9755.yaml`, elle aussi absente. Les tailles et
-SHA-256 ne peuvent donc pas être calculés localement.
+État versionné : `models/manifest.json` conserve des métadonnées `null` pour les
+tailles et SHA-256 qui ne sont pas vérifiés. Il déclare également la
+configuration `model_bs_roformer_ep_317_sdr_12.9755.yaml`. Les fichiers sous
+`models/` étant ignorés par Git, cette documentation ne conclut rien sur leur
+présence dans un checkout particulier.
 
 Les fichiers Demucs `.yaml` du tableau sont des configurations, pas les poids
-du modèle. Poids `.th` : absents et pas complètement inventoriés dans
-`models/manifest.json`. Le gate ne peut donc pas prouver qu'un bundle
+du modèle. Aucun poids `.th` n'est inventorié dans le manifeste versionné. Le
+gate ne peut donc pas prouver qu'un bundle
 contient tous les actifs Demucs requis ; cette lacune bloque explicitement la
 publication.
 

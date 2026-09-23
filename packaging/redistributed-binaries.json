@@ -6,6 +6,9 @@
       "licence": null,
       "source": null,
       "version": null,
+      "architecture": null,
+      "sha256": null,
+      "dependency_policy": null,
       "licence_status": "unknown"
     },
     {
@@ -13,6 +16,9 @@
       "licence": null,
       "source": null,
       "version": null,
+      "architecture": null,
+      "sha256": null,
+      "dependency_policy": null,
       "licence_status": "unknown"
     }
   ]
