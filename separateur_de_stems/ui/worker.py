@@ -5,8 +5,11 @@ interface can stay responsive and cancellable. This module depends on
 ``QtCore`` only: no widget is imported here.
 """
 
+import ctypes
+import errno
 import multiprocessing
 import os
+import sys
 import threading
 from pathlib import Path
 
@@ -44,10 +47,8 @@ def _finalize_outputs(
 
     song = sanitize(Path(context.input_path).stem)
     final_song_dir = Path(context.output_dir) / song
-    if os.path.lexists(final_song_dir):
-        raise FileExistsError(f"Output already exists: {final_song_dir}")
 
-    staged_song_dir = Path(context.workspace) / "deliverables" / song
+    staged_song_dir = Path(context.workspace) / f".{song}.staging"
     exported: list[Path] = []
     for stem in sorted(context.stems):
         _raise_if_cancelled(cancel_requested)
@@ -72,36 +73,54 @@ def _finalize_outputs(
     if missing_deliverables:
         raise RuntimeError(f"Export did not create: {missing_deliverables[0]}")
     _raise_if_cancelled(cancel_requested)
-    try:
-        final_song_dir.mkdir()
-    except FileExistsError:
-        raise FileExistsError(f"Output already exists: {final_song_dir}") from None
-
-    published: list[Path] = []
-    try:
-        for staged_path in exported:
-            _raise_if_cancelled(cancel_requested)
-            destination = final_song_dir / staged_path.name
-            os.link(staged_path, destination)
-            published.append(destination)
-        _raise_if_cancelled(cancel_requested)
-    except BaseException:
-        for path in reversed(published):
-            try:
-                path.unlink()
-            except OSError:
-                pass
-        try:
-            final_song_dir.rmdir()
-        except OSError:
-            pass
-        raise
+    _rename_no_replace(staged_song_dir, final_song_dir)
     return [str(final_song_dir / path.name) for path in exported]
 
 
 def _raise_if_cancelled(cancel_requested) -> None:
     if cancel_requested():
         raise CancelledError("Export cancelled")
+
+
+def _rename_no_replace(source: Path, destination: Path) -> None:
+    """Atomically rename without replacement, or fail closed."""
+    libc = ctypes.CDLL(None, use_errno=True)
+    source_bytes = os.fsencode(source)
+    destination_bytes = os.fsencode(destination)
+
+    if sys.platform.startswith("linux"):
+        rename = getattr(libc, "renameat2", None)
+        if rename is None:
+            raise OSError(errno.ENOTSUP, "renameat2 is unavailable")
+        rename.argtypes = [
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_uint,
+        ]
+        rename.restype = ctypes.c_int
+        result = rename(-100, source_bytes, -100, destination_bytes, 1)
+    elif sys.platform == "darwin":
+        rename = getattr(libc, "renamex_np", None)
+        if rename is None:
+            raise OSError(errno.ENOTSUP, "renamex_np is unavailable")
+        rename.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
+        rename.restype = ctypes.c_int
+        result = rename(source_bytes, destination_bytes, 4)
+    else:
+        raise OSError(errno.ENOTSUP, "atomic no-replace rename is unavailable")
+
+    if result == 0:
+        return
+    error_number = ctypes.get_errno()
+    if error_number in (errno.EEXIST, errno.ENOTEMPTY):
+        raise FileExistsError(
+            error_number,
+            f"Output already exists: {destination}",
+            str(destination),
+        )
+    raise OSError(error_number, os.strerror(error_number), str(destination))
 
 
 def _create_progress_queue():
@@ -205,7 +224,6 @@ class SeparationWorker(QThread):
                     dict(payload or {}),
                     cancel_requested=self._cancel_requested.is_set,
                 )
-                _raise_if_cancelled(self._cancel_requested.is_set)
                 self.completed.emit(exported)
             return
 

@@ -455,25 +455,48 @@ def test_finalization_runs_in_worker_thread(qtbot, tmp_path):
     assert thread_ids != [gui_thread]
 
 
+def test_final_directory_appears_only_after_complete_batch(tmp_path):
+    context = _run_context(tmp_path, frozenset({"vocals"}))
+    raw = Path(context.workspace) / "vocals.wav"
+    raw.write_bytes(b"new")
+    final_dir = Path(context.output_dir) / "song"
+
+    def observing_mp3(src, dest, **kwargs):
+        assert final_dir.exists() is False
+        return _writing_exporter(src, dest)
+
+    published = worker_module._finalize_outputs(
+        context,
+        {"vocals": str(raw)},
+        wav_exporter=_writing_exporter,
+        mp3_exporter=observing_mp3,
+    )
+
+    assert final_dir.is_dir()
+    assert {path.name for path in final_dir.iterdir()} == {
+        "song_vocals.wav",
+        "song_vocals.mp3",
+    }
+    assert set(published) == {str(path) for path in final_dir.iterdir()}
+
+
 @pytest.mark.parametrize("conflict_kind", ["file", "directory"])
-def test_publication_does_not_replace_destination_created_during_publish(
+def test_atomic_publish_preserves_destination_winning_race(
     tmp_path, monkeypatch, conflict_kind
 ):
     context = _run_context(tmp_path, frozenset({"vocals"}))
     raw = Path(context.workspace) / "vocals.wav"
     raw.write_bytes(b"new")
     final_dir = Path(context.output_dir) / "song"
-    original_link = os.link
 
-    def racing_link(source, destination):
-        destination = Path(destination)
+    def racing_rename(source, destination):
         if conflict_kind == "file":
-            destination.write_bytes(b"preexisting")
+            Path(destination).write_bytes(b"preexisting")
         else:
-            destination.mkdir()
-        return original_link(source, destination)
+            Path(destination).mkdir()
+        raise FileExistsError(destination)
 
-    monkeypatch.setattr(os, "link", racing_link)
+    monkeypatch.setattr(worker_module, "_rename_no_replace", racing_rename)
 
     with pytest.raises(FileExistsError):
         worker_module._finalize_outputs(
@@ -483,27 +506,21 @@ def test_publication_does_not_replace_destination_created_during_publish(
             mp3_exporter=_cancellable_writing_exporter,
         )
 
-    conflict = final_dir / "song_vocals.wav"
-    assert conflict.exists()
     if conflict_kind == "file":
-        assert conflict.read_bytes() == b"preexisting"
+        assert final_dir.read_bytes() == b"preexisting"
+    else:
+        assert list(final_dir.iterdir()) == []
 
 
-def test_publication_failure_rolls_back_only_files_linked_by_run(tmp_path, monkeypatch):
+def test_cross_device_publish_fails_without_visible_destination(tmp_path, monkeypatch):
     context = _run_context(tmp_path, frozenset({"vocals"}))
     raw = Path(context.workspace) / "vocals.wav"
     raw.write_bytes(b"new")
-    original_link = os.link
-    calls = 0
 
-    def fail_second_link(source, destination):
-        nonlocal calls
-        calls += 1
-        if calls == 2:
-            raise OSError(errno.EXDEV, "cross-device link")
-        return original_link(source, destination)
+    def cross_device_rename(source, destination):
+        raise OSError(errno.EXDEV, "cross-device")
 
-    monkeypatch.setattr(os, "link", fail_second_link)
+    monkeypatch.setattr(worker_module, "_rename_no_replace", cross_device_rename)
 
     with pytest.raises(OSError, match="cross-device"):
         worker_module._finalize_outputs(

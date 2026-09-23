@@ -264,14 +264,58 @@ def test_to_mp3_320_terminates_process_when_cancelled(tmp_path, monkeypatch):
         def terminate(self):
             self.terminated = True
 
-        def communicate(self, timeout=None):
-            return b"", b""
+        def wait(self, timeout=None):
+            return -15
+
+        def kill(self):
+            self.terminated = True
 
     process = SlowProcess()
-    monkeypatch.setattr(subprocess, "Popen", lambda *args, **kwargs: process)
+
+    def fake_popen(*args, **kwargs):
+        kwargs["stderr"].write(b"x" * (1024 * 1024))
+        return process
+
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
 
     with pytest.raises(CancelledError):
         to_mp3_320(str(source), str(dest), cancel_requested=cancelled.is_set)
 
     assert process.terminated is True
     assert dest.exists() is False
+
+
+@pytest.mark.parametrize("returncode", [0, 1])
+def test_cancellable_mp3_handles_large_stderr_without_pipe_deadlock(
+    tmp_path, monkeypatch, returncode
+):
+    source, _ = write_source(tmp_path)
+    dest = tmp_path / "stem.mp3"
+    stderr_tail = b"distinct-error-tail"
+
+    class NoisyProcess:
+        def __init__(self, stderr):
+            self.returncode = returncode
+            stderr.write(b"x" * (1024 * 1024) + stderr_tail)
+            if returncode == 0:
+                dest.write_bytes(b"mp3")
+
+        def poll(self):
+            return self.returncode
+
+    def fake_popen(args, **kwargs):
+        assert kwargs["stderr"] != subprocess.PIPE
+        assert kwargs["stdout"] != subprocess.PIPE
+        return NoisyProcess(kwargs["stderr"])
+
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+
+    if returncode == 0:
+        assert to_mp3_320(
+            str(source), str(dest), cancel_requested=lambda: False
+        ) == str(dest)
+    else:
+        with pytest.raises(OutputError) as exc_info:
+            to_mp3_320(str(source), str(dest), cancel_requested=lambda: False)
+        assert stderr_tail.decode() in str(exc_info.value)
+        assert not dest.exists()

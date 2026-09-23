@@ -1,6 +1,7 @@
 """Audio export helpers: 24-bit WAV rewriting and 320 kb/s MP3 encoding."""
 
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 
@@ -85,23 +86,27 @@ def to_mp3_320(src: str, dest: str, cancel_requested=None) -> str:
 
 
 def _run_cancellable(args: list[str], cancel_requested) -> None:
-    process = subprocess.Popen(
-        args,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    while process.poll() is None:
-        if cancel_requested():
-            process.terminate()
-            try:
-                process.communicate(timeout=0.5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.communicate()
-            raise CancelledError("MP3 encoding cancelled")
-        time.sleep(0.05)
-    _, stderr = process.communicate()
-    if process.returncode:
-        raise subprocess.CalledProcessError(
-            process.returncode, args, stderr=stderr
+    with tempfile.TemporaryFile() as stderr_file:
+        process = subprocess.Popen(
+            args,
+            stdout=subprocess.DEVNULL,
+            stderr=stderr_file,
         )
+        while process.poll() is None:
+            if cancel_requested():
+                process.terminate()
+                try:
+                    process.wait(timeout=0.5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+                raise CancelledError("MP3 encoding cancelled")
+            time.sleep(0.05)
+        if process.returncode:
+            stderr_file.flush()
+            size = stderr_file.seek(0, 2)
+            stderr_file.seek(max(0, size - _STDERR_TAIL))
+            stderr = stderr_file.read()
+            raise subprocess.CalledProcessError(
+                process.returncode, args, stderr=stderr
+            )

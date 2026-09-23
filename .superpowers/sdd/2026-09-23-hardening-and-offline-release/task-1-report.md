@@ -94,3 +94,34 @@ QT_QPA_PLATFORM=offscreen ../../.venv/bin/python -m pytest tests/ui -q
 ../../.venv/bin/python -m pytest tests/core/test_export.py -q
 18 passed in 0.24s
 ```
+
+## Review Fix Round 3
+
+- The complete hidden staging directory is now published in one atomic filesystem operation; the final song directory is never visible partially populated.
+- Linux uses `renameat2(..., RENAME_NOREPLACE)` and macOS uses `renamex_np(..., RENAME_EXCL)` through libc. Unsupported platforms or unavailable primitives fail closed with `ENOTSUP`.
+- Existing destination files and directories are never replaced, including destinations created immediately before the native rename.
+- Per-file publication and rollback were removed. Before commit, all artifacts remain below the private workspace; after commit, no individual destination path is removed.
+- Cancellable ffmpeg execution sends stdout to `DEVNULL` and stderr to a secure temporary file, so large output cannot fill a pipe. Polling remains responsive and only the bounded stderr tail is loaded for errors.
+- Cancellation terminates ffmpeg, escalates to `kill()` on timeout, and leaves no published directory.
+
+The focused TDD red run produced six expected failures and one pre-existing pass. Focused green verification:
+
+```text
+QT_QPA_PLATFORM=offscreen ../../.venv/bin/python -m pytest \
+  tests/ui/test_worker.py::test_final_directory_appears_only_after_complete_batch \
+  tests/ui/test_worker.py::test_atomic_publish_preserves_destination_winning_race \
+  tests/ui/test_worker.py::test_cross_device_publish_fails_without_visible_destination \
+  tests/core/test_export.py::test_cancellable_mp3_handles_large_stderr_without_pipe_deadlock \
+  tests/core/test_export.py::test_to_mp3_320_terminates_process_when_cancelled -q
+7 passed in 0.09s
+```
+
+Full pre-commit verification:
+
+```text
+QT_QPA_PLATFORM=offscreen ../../.venv/bin/python -m pytest tests/ui -q
+141 passed in 2.64s
+
+../../.venv/bin/python -m pytest tests/core/test_export.py -q
+20 passed in 0.24s
+```
