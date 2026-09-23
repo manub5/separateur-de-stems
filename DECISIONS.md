@@ -94,10 +94,10 @@ Python installés sur la machine cible, tout en gardant un bundle raisonnable.
   bibliothèques Qt/torch sans extraction temporaire, et arborescence
   inspectable — `dist/StemSeparator/StemSeparator` sous Linux,
   `StemSeparator.app` sous macOS.
-- **Modèles hors bundle** : les modèles UVR ne sont pas embarqués dans
-  l'archive ; ils vivent sous `models/` en développement et, une fois figé,
-  sous `AppDataLocation/StemSeparator` (cf. D-008). Cela évite un bundle de
-  plusieurs gigaoctets et permet de mettre à jour les modèles indépendamment.
+- **Modèles intégrés au bundle de publication** : le build est refusé tant que
+  chaque modèle sélectionné, sa configuration et les métadonnées du manifeste
+  ne sont pas complets. En développement seulement, `models/` ou un override
+  utilisateur validé peut fournir les actifs locaux (cf. D-012).
 - **ffmpeg embarqué** : la spécification intègre le binaire ffmpeg et
   `core.platform.ffmpeg_executable` le résout sous
   `sys._MEIPASS/ffmpeg/ffmpeg` en build figé, sinon retombe sur le `PATH`
@@ -127,10 +127,9 @@ Python installés sur la machine cible, tout en gardant un bundle raisonnable.
   multi-gigaoctets, n'existe que sous Linux). Le bundle Linux local pèse
   environ 5,8 Go précisément parce qu'il embarque la variante CUDA.
 - **Artefact macOS + repli GitHub Release** : le workflow produit
-  `StemSeparator-macos.zip` via `ditto` et le publie comme artefact
-  (`actions/upload-artifact`). Si l'archive dépasse la limite de taille des
-  artefacts GitHub (≈2 Go), repli documenté : publier l'archive comme ressource
-  de *release* (`gh release upload`) et ne garder qu'un petit pointeur/checksum.
+  `StemSeparator-macos.zip` via `ditto` seulement après les gates hors ligne.
+  L'upload public d'un tag reste désactivé jusqu'à validation des licences et
+  du lock transitif hashé. La taille est mesurée avant tout upload.
 - **Application non signée** : pas de signature ni de notarisation Apple
   (pas de certificat). Le README FR/EN décrit la procédure de premier lancement
   (Réglages Système > Confidentialité et sécurité > « Ouvrir quand même »).

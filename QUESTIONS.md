@@ -2,11 +2,12 @@
 
 - Q-001 : `htdemucs_6s` n'a pas de score SDR pour guitar/piano. Faut-il
   chercher un modèle spécialisé hors catalogue UVR pour ces pistes ?
-- Q-002 : la stratégie de distribution des modèles (CI/GitHub) est différée ;
-  tout reste local au PC pour l'instant.
-- Q-003 : le mode 100 % hors ligne exige d'embarquer les poids,
-  `download_checks.json` et les configurations MDXC. À traiter lors de la phase
-  d'empaquetage.
+- Q-002 — Résolue techniquement : la publication exige des modèles intégrés et
+  validés par manifeste ; aucun téléchargement au premier usage n'est prévu.
+  La publication reste bloquée tant que les actifs et licences manquent.
+- Q-003 — Résolue techniquement : le gate d'empaquetage exige les poids,
+  `download_checks.json` et les configurations. Les actifs locaux sont encore
+  incomplets, donc aucun bundle de publication hors ligne ne peut être produit.
 - Q-004 : les licences des modèles retenus restent « À vérifier » dans
   MODELS.md. Vérifier leur compatibilité avec une diffusion publique de
   l'application avant toute distribution.
@@ -17,3 +18,6 @@
   ffprobe ainsi que leur source et version dans
   `packaging/redistributed-binaries.json`, puis générer sur macOS arm64 un lock
   transitif avec hashes. L'upload d'un tag reste bloqué avant ces validations.
+- Q-007 : valider sur un runner macOS arm64 MPS/CoreML, `renamex_np` et le
+  fonctionnement réel du `.app` final ; ces chemins restent non vérifiés sous
+  Linux.

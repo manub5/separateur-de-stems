@@ -24,19 +24,24 @@
   (`README.md`) documentant installation, CLI, UI, traductions, builds et
   premier lancement macOS non signé. Suite de tests complète verte en
   offscreen (dont `tests/packaging/test_readme.py`).
+- Durcissement Tasks 1 à 3 terminé : état d'exécution UI immuable, annulation
+  et fermeture asynchrones, pipeline/export hors GUI avec publication atomique,
+  espace privé et nettoyage confiné, puis gates stricts d'empaquetage hors
+  ligne et manifeste de modèles.
 
 ## En cours
 
-- Durcissement de la livraison hors ligne : gate strict et smoke bundle
-  implémentés ; validation macOS arm64 réelle en attente du workflow.
+- Task 4 : alignement de la documentation, des notices et de l'état de release.
 
 ## À faire
 
 - Compléter et valider légalement les actifs de `models/manifest.json`, puis
   exécuter le workflow macOS arm64. Signature/notarisation Apple et accélération
   MPS/CoreML restent ensuite à revérifier.
+- Task 5 : exécuter le gate qualité complet et les smokes réalisables.
 
 ## Bloqué
 
 - Build distribuable bloqué intentionnellement : poids/configurations/checksums
-  et licences des modèles incomplets.
+  et licences des modèles incomplets ; métadonnées ffmpeg/ffprobe inconnues et
+  lock transitif macOS arm64 hashé absent.

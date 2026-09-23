@@ -1,9 +1,9 @@
 # Séparateur de pistes (Stem Separator)
 
-Séparateur de pistes audio pour bureau, construit sur
+Application de bureau PySide6 fondée sur
 [`audio-separator`](https://github.com/nomadkaraoke/python-audio-separator) et
-les modèles UVR (BS-RoFormer, Mel-Band RoFormer, MDX, Demucs v4). Interface
-PySide6, identique sous Linux et macOS.
+des modèles UVR éprouvés. Aucun modèle n'est entraîné et aucun algorithme de
+séparation n'est réimplémenté dans ce projet.
 
 - [Français](#français)
 - [English](#english)
@@ -12,243 +12,159 @@ PySide6, identique sous Linux et macOS.
 
 ## Français
 
-### Présentation
+### Fonctionnement
 
-L'application sépare un fichier audio en pistes individuelles (voix, batterie,
-basse, guitare, piano, instrumental/le reste). Elle s'appuie **uniquement** sur
-des modèles déjà éprouvés fournis par `audio-separator` : aucun modèle n'est
-entraîné, aucun algorithme de séparation n'est réimplémenté. Le meilleur modèle
-disponible par type de piste est choisi automatiquement à partir de son score
-SDR (voir `MODELS.md`).
+L'application accepte WAV, FLAC, MP3, AIFF et M4A et produit, pour chaque piste
+demandée, un WAV 24 bits et un MP3 320 kb/s. Les pistes proposées sont voix,
+batterie, basse, guitare, piano et instrumental/reste. La sélection des modèles
+est décrite dans `MODELS.md`.
 
-Formats d'entrée : WAV, FLAC, MP3, AIFF, M4A.
-Sorties par piste : WAV 24 bits et MP3 320 kb/s.
+Une exécution capture une configuration immuable. L'entrée, la sortie et les
+réglages restent verrouillés jusqu'au signal natif `QThread.finished`.
+L'annulation et la fermeture sont asynchrones : elles demandent l'arrêt sans
+bloquer la boucle Qt, puis attendent la fin native du thread.
 
-### Prérequis
+La séparation et les exports WAV/MP3 s'exécutent hors de l'interface. Chaque
+lot utilise un espace de travail privé, convertit le WAV par blocs bornés,
+permet d'annuler ffmpeg et vérifie que tous les résultats existent. Un lot
+complet est publié atomiquement dans un nouveau dossier de morceau ; un dossier
+de morceau existant n'est jamais remplacé. L'échec ou l'annulation ne nettoie
+que l'espace privé de l'exécution.
 
-- **Python 3.12** (version supportée par toutes les dépendances).
-- **ffmpeg** pour le développement et l'usage CLI.
-- GPU CUDA optionnel sous Linux (accélération détectée automatiquement).
+### Prérequis et développement
 
-### Installation (développement)
+- Python `>=3.12,<3.13`, plage déclarée dans `pyproject.toml`.
+- ffmpeg et ffprobe accessibles pour l'usage en développement.
+- Un répertoire de modèles complet et validé ; aucun téléchargement implicite
+  ne fait partie du flux d'exécution.
 
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
-pip install -e .
-# Dépendances de test uniquement :
 pip install -e ".[dev]"
-```
 
-> Sous Linux, si l'installation de `diffq` échoue (en-têtes Python absents),
-> utiliser le contournement `diffq-fixed` documenté dans `DECISIONS.md`
-> (D-002).
-
-### Utilisation — ligne de commande
-
-```bash
-# Lister les meilleurs modèles par piste
 separateur-de-stems --list-models
-
-# Séparer un fichier (voix + instrumental par défaut)
-separateur-de-stems morceau.flac
-
-# Choisir les pistes et le dossier de sortie
-separateur-de-stems morceau.wav --stems vocals,drums,bass --output-dir sortie
-
-# Export WAV uniquement (sans MP3)
+separateur-de-stems morceau.flac --stems vocals,drums --output-dir sortie
 separateur-de-stems morceau.mp3 --no-mp3
-```
 
-### Utilisation — interface graphique
-
-```bash
 separateur-de-stems-ui
-# Optionnel : ouvrir un fichier au lancement
 separateur-de-stems-ui --file morceau.flac
 ```
 
-Glisser-déposer un fichier dans la fenêtre ou utiliser le bouton « Ouvrir »,
-cocher les pistes souhaitées, choisir le dossier de sortie, puis lancer la
-séparation. Le calcul tourne dans un thread séparé : l'interface ne gèle jamais
-et une annulation est toujours possible.
+En développement, les modèles résident dans `models/` ou dans le répertoire
+explicitement choisi dans les réglages. Le CLI et l'interface exigent que les
+actifs nécessaires soient déjà disponibles localement.
 
-### Traductions
-
-L'interface est bilingue français/anglais (choix dans les réglages, mémorisé).
-Les catalogues Qt sont générés à partir des sources `ui/` :
+### Traductions et tests
 
 ```bash
-# (Re)générer le catalogue .ts et compiler le .qm
 python scripts/build_translations.py
-
-# Vérifier que le .qm committé est à jour (sans écrire)
 python scripts/build_translations.py --check
+QT_QPA_PLATFORM=offscreen python -m pytest -q
 ```
 
-### Compilation
+### Builds et publication hors ligne
 
-**Linux (PyInstaller) :**
+Le build de développement Linux se lance avec `packaging/build_linux.sh`. Le
+workflow macOS est `.github/workflows/build-macos.yml`.
 
-```bash
-packaging/build_linux.sh
-# Le binaire est produit dans dist/StemSeparator/StemSeparator
-```
+**PUBLICATION BLOQUÉE.** La configuration d'empaquetage impose les modèles,
+leurs configurations, `download_checks.json`, ffmpeg et ffprobe avant de créer
+un bundle hors ligne. `models/manifest.json` montre actuellement des poids,
+configurations, tailles, SHA-256, sources ou licences incomplets. Les licences,
+sources et versions des binaires restent inconnues dans
+`packaging/redistributed-binaries.json`. Enfin,
+`requirements/macos-arm64.lock` n'est qu'un inventaire direct épinglé : le vrai
+`requirements/macos-arm64-transitive.lock` avec hashes n'existe pas encore.
+Aucun artefact public de tag n'est donc autorisé.
 
-Sous Linux, ffmpeg est détecté dans le `PATH` ; il est intégré au bundle par la
-spécification PyInstaller. Dans l'application figée, le ffmpeg embarqué est
-exposé automatiquement : son dossier est placé en tête du `PATH` et pydub est
-configuré pour l'utiliser, de sorte que `audio-separator` (qui appelle
-`ffmpeg -version`) et l'export MP3 fonctionnent **sans ffmpeg système**.
+Le build de développement et le build de publication diffèrent : le premier
+peut utiliser les actifs locaux et les outils du `PATH`; le second doit franchir
+toutes les validations du manifeste et embarquer modèles, ffmpeg et ffprobe.
 
-**macOS (Apple Silicon) :**
+L'accélération macOS MPS/CoreML est déléguée à `audio-separator`.
+MPS/CoreML, `renamex_np` et le `.app` final restent non vérifiés jusqu'à l'exécution du
+workflow sur macOS arm64. L'application prévue est non signée ; au premier
+lancement, utiliser **Réglages Système > Confidentialité et sécurité > Ouvrir quand même**,
+puis saisir le mot de passe administrateur.
 
-La compilation macOS passe par GitHub Actions (`.github/workflows/build-macos.yml`,
-runner `macos-14` arm64). Le workflow installe les dépendances (torch CPU/MPS,
-sans pile CUDA), vérifie les traductions, teste en mode sans écran, construit le
-`.app` avec PyInstaller, le teste (`--help`), puis le compresse en
-`StemSeparator-macos.zip` publié comme artefact. Si l'archive dépasse la limite
-de taille des artefacts GitHub, elle peut être publiée comme ressource de
-*release* (voir `DECISIONS.md`, D-011).
-
-### Premier lancement sous macOS (application non signée)
-
-L'application est **non signée** (pas de signature ni de notarisation Apple).
-Au premier double-clic, macOS peut afficher un message de blocage. Procédure :
-
-1. Double-cliquer sur `StemSeparator.app` → message de blocage de macOS.
-2. Ouvrir **Réglages Système > Confidentialité et sécurité**.
-3. Cliquer sur **« Ouvrir quand même »**.
-4. Saisir le mot de passe administrateur.
-
-L'application s'ouvre ensuite normalement. Les modèles ne sont **pas** embarqués
-dans le bundle : ils sont téléchargés/cachés au premier usage.
-
-### Crédits et licence
-
-- Séparation : [`audio-separator`](https://github.com/nomadkaraoke/python-audio-separator)
-  et les modèles UVR (Ultimate Vocal Remover).
-- Interface : [PySide6](https://www.qt.io/qt-for-python) (Qt).
-- Détails des modèles, scores SDR, tailles et licences : voir `MODELS.md`.
+Les attributions vérifiées et les éléments en attente figurent dans
+`THIRD_PARTY_NOTICES.md`.
 
 ---
 
 ## English
 
-### Overview
+### Behavior
 
-This desktop app splits an audio file into individual stems (vocals, drums,
-bass, guitar, piano, instrumental/other). It relies **only** on proven models
-provided by `audio-separator`: no model is trained and no separation algorithm
-is reimplemented. The best available model per stem type is chosen
-automatically from its SDR score (see `MODELS.md`).
+The application accepts WAV, FLAC, MP3, AIFF, and M4A and produces a 24-bit WAV
+and a 320 kb/s MP3 for each requested stem. Available stems are vocals, drums,
+bass, guitar, piano, and instrumental/other. Model selection is documented in
+`MODELS.md`.
 
-Input formats: WAV, FLAC, MP3, AIFF, M4A.
-Per-stem outputs: 24-bit WAV and 320 kb/s MP3.
+Each run captures immutable configuration. Input, output, and settings controls
+remain locked until native `QThread.finished`. Cancellation and closing are asynchronous: they request shutdown without blocking the Qt event loop and wait
+for native thread completion.
 
-### Requirements
+Separation and WAV/MP3 exports run outside the GUI. Each batch uses a private
+workspace, performs bounded-block WAV conversion, supports cancellable ffmpeg,
+and verifies every result. A complete batch is published atomically to a new
+song directory; an existing song directory is never replaced. Failure or
+cancellation cleans only that run's private workspace.
 
-- **Python 3.12** (supported by every dependency).
-- **ffmpeg** for development and CLI use.
-- Optional CUDA GPU on Linux (acceleration is detected automatically).
+### Requirements and development
 
-### Installation (development)
+- Python `>=3.12,<3.13`, as declared by `pyproject.toml`.
+- ffmpeg and ffprobe available for development use.
+- A complete validated model directory; runtime does not implicitly download
+  missing release assets.
 
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
-pip install -e .
-# Test dependencies only:
 pip install -e ".[dev]"
-```
 
-> On Linux, if installing `diffq` fails (missing Python headers), use the
-> `diffq-fixed` workaround documented in `DECISIONS.md` (D-002).
-
-### Command-line usage
-
-```bash
-# List the best models per stem
 separateur-de-stems --list-models
-
-# Separate a file (vocals + instrumental by default)
-separateur-de-stems track.flac
-
-# Choose stems and output directory
-separateur-de-stems track.wav --stems vocals,drums,bass --output-dir out
-
-# WAV only (skip MP3)
+separateur-de-stems track.flac --stems vocals,drums --output-dir out
 separateur-de-stems track.mp3 --no-mp3
-```
 
-### Graphical interface usage
-
-```bash
 separateur-de-stems-ui
-# Optional: open a file at launch
 separateur-de-stems-ui --file track.flac
 ```
 
-Drag and drop a file onto the window (or use the "Open" button), tick the
-desired stems, pick the output directory, then start the separation. Processing
-runs in a separate thread: the interface never freezes and cancellation is
-always available.
+In development, models live in `models/` or in the directory explicitly chosen
+in settings. The CLI and GUI require all needed assets to exist locally.
 
-### Translations
-
-The interface is bilingual French/English (selected in the settings and
-remembered across launches). The Qt catalogs are generated from the `ui/`
-sources:
+### Translations and tests
 
 ```bash
-# (Re)generate the .ts catalog and compile the .qm
 python scripts/build_translations.py
-
-# Check that the committed .qm is up to date (without writing)
 python scripts/build_translations.py --check
+QT_QPA_PLATFORM=offscreen python -m pytest -q
 ```
 
-### Building
+### Builds and offline publication
 
-**Linux (PyInstaller):**
+Run the Linux development build with `packaging/build_linux.sh`. The macOS
+workflow is `.github/workflows/build-macos.yml`.
 
-```bash
-packaging/build_linux.sh
-# The binary is produced at dist/StemSeparator/StemSeparator
-```
+**PUBLIC RELEASE BLOCKED.** Packaging strictly requires models, their configs,
+`download_checks.json`, ffmpeg, and ffprobe before producing an offline bundle.
+`models/manifest.json` currently records incomplete payloads, configurations,
+sizes, SHA-256 hashes, sources, or licences. Binary licences, sources, and
+versions remain unknown in `packaging/redistributed-binaries.json`. Finally,
+`requirements/macos-arm64.lock` is only a pinned direct inventory; a true
+hashed `requirements/macos-arm64-transitive.lock` does not exist yet. No public
+tag artifact is therefore permitted.
 
-On Linux, ffmpeg is detected on the `PATH`; it is bundled by the PyInstaller
-spec. In the frozen app the bundled ffmpeg is exposed automatically: its
-directory is prepended to `PATH` and pydub is pointed at it, so
-`audio-separator` (which calls `ffmpeg -version`) and the MP3 export both work
-**without a system ffmpeg**.
+Development and release builds differ: development may use local assets and
+tools from `PATH`; release must pass every manifest gate and bundle the models,
+ffmpeg, and ffprobe.
 
-**macOS (Apple Silicon):**
+macOS MPS/CoreML acceleration is delegated to `audio-separator`.
+MPS/CoreML, `renamex_np`, and the final `.app` remain unverified until the workflow runs on
+macOS arm64. The intended app is unsigned; on first launch use **System Settings
+> Privacy & Security > Open Anyway**, then enter the administrator password.
 
-The macOS build runs on GitHub Actions
-(`.github/workflows/build-macos.yml`, `macos-14` arm64 runner). The workflow
-installs the dependencies (CPU/MPS torch, no CUDA stack), verifies the
-translations, runs the headless test suite, builds the `.app` with PyInstaller,
-smoke-tests it (`--help`), then zips it as `StemSeparator-macos.zip` published
-as an artifact. If the archive exceeds GitHub's artifact size limit, it can be
-published as a release asset instead (see `DECISIONS.md`, D-011).
-
-### First launch on macOS (unsigned app)
-
-The app is **unsigned** (no Apple signature or notarization). On the first
-double-click, macOS may show a blocking message. Procedure:
-
-1. Double-click `StemSeparator.app` → macOS blocking message.
-2. Open **System Settings > Privacy & Security**.
-3. Click **"Open Anyway"**.
-4. Enter the administrator password.
-
-The app then opens normally. Models are **not** bundled: they are
-downloaded/cached on first use.
-
-### Credits and license
-
-- Separation: [`audio-separator`](https://github.com/nomadkaraoke/python-audio-separator)
-  and the UVR (Ultimate Vocal Remover) models.
-- Interface: [PySide6](https://www.qt.io/qt-for-python) (Qt).
-- Model details, SDR scores, sizes and licenses: see `MODELS.md`.
+Verified attributions and pending items are listed in
+`THIRD_PARTY_NOTICES.md`.
