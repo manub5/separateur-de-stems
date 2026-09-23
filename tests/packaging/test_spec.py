@@ -38,5 +38,5 @@ def test_spec_uses_real_bundle_identifier():
 
 
 def test_spec_fails_before_analysis_when_release_metadata_is_incomplete():
-    with pytest.raises(PackagingError, match="licence|manifest"):
+    with pytest.raises(PackagingError, match="licence|manifest|fields"):
         runpy.run_path(str(SPEC), init_globals={"SPECPATH": str(SPEC.parent)})

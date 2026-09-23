@@ -4,11 +4,15 @@
     {
       "name": "ffmpeg",
       "licence": null,
+      "source": null,
+      "version": null,
       "licence_status": "unknown"
     },
     {
       "name": "ffprobe",
       "licence": null,
+      "source": null,
+      "version": null,
       "licence_status": "unknown"
     }
   ]

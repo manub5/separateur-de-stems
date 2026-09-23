@@ -47,7 +47,12 @@ jobs:
       # it would pull the multi-gigabyte CUDA stack that only exists on Linux.
       # Direct versions only. Tagged releases additionally require a transitive,
       # hashed lock generated and validated on macOS arm64.
-      - name: Install Python dependencies
+      - name: Install Python dependencies for tagged release
+        if: startsWith(github.ref, 'refs/tags/')
+        run: python -m pip install --require-hashes -r requirements/macos-arm64-transitive.lock
+
+      - name: Install Python dependencies for development build
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         run: python -m pip install -r requirements/macos-arm64.lock
 
       - name: Run tests (offscreen, fast only)

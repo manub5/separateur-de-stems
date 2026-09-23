@@ -156,3 +156,10 @@ tag, `scripts.validate_release` exige en plus les licences redistribuables de
 ffmpeg/ffprobe et un futur `requirements/macos-arm64-transitive.lock` avec de
 vrais hashes, généré et validé sur macOS arm64. Aucun hash ni lock transitif
 n'est fabriqué depuis Linux ; l'upload tag reste bloqué jusque-là.
+
+Le validateur du futur lock accepte uniquement une exigence `nom==version` par
+ligne, suivie d'au moins un SHA-256 complet. Il refuse options, includes, URLs,
+markers et doublons, exige les mêmes versions directes que l'inventaire, un
+ensemble strictement supérieur, ainsi que les transitifs critiques observables
+dans l'application : `torch`, `numpy`, `onnxruntime`, `librosa` et `pydub`.
+Pour un tag, ce lock est l'unique source passée à pip avec `--require-hashes`.

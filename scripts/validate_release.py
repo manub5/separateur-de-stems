@@ -23,7 +23,7 @@ def main() -> int:
     )
     args = parser.parse_args()
     validate_redistributed_binary_licences(args.binary_licences)
-    validate_macos_release_lock(args.macos_lock)
+    validate_macos_release_lock(args.macos_lock, Path("requirements/macos-arm64.lock"))
     return 0
 
 

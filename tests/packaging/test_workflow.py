@@ -108,7 +108,7 @@ def test_workflow_has_read_only_permissions_and_direct_inventory():
     assert data["permissions"] == {"contents": "read"}
     install = next(
         step["run"] for step in data["jobs"]["build"]["steps"]
-        if step.get("name") == "Install Python dependencies"
+        if step.get("name") == "Install Python dependencies for development build"
     )
     assert "requirements/macos-arm64.lock" in install
     assert "--upgrade pip" not in install
@@ -122,6 +122,21 @@ def test_tag_upload_depends_on_release_gate():
     assert "refs/tags/" in gate["if"]
     assert "scripts.validate_release" in gate["run"]
     assert "steps.release_gate.outcome == 'success'" in upload["if"]
+
+
+def test_tag_installs_only_validated_transitive_lock_with_hashes():
+    steps = _load()["jobs"]["build"]["steps"]
+    installs = [step for step in steps if step.get("name", "").startswith("Install Python dependencies")]
+    tag_install = next(step for step in installs if "tagged release" in step["name"])
+    dev_install = next(step for step in installs if "development build" in step["name"])
+    assert "refs/tags/" in tag_install["if"]
+    assert "!startsWith" in dev_install["if"]
+    assert tag_install["run"] == (
+        "python -m pip install --require-hashes "
+        "-r requirements/macos-arm64-transitive.lock"
+    )
+    assert "macos-arm64.lock" not in tag_install["run"]
+    assert "macos-arm64.lock" in dev_install["run"]
 
 
 def test_workflow_validates_binary_architecture_smokes_and_hashes_artifact():

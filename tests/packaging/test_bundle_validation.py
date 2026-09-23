@@ -19,7 +19,13 @@ def _binary_manifest(path, status="distributable"):
     path.write_text(json.dumps({
         "schema_version": 1,
         "binaries": [
-            {"name": name, "licence": "LGPL-2.1-or-later", "licence_status": status}
+            {
+                "name": name,
+                "licence": "LGPL-2.1-or-later",
+                "source": "https://example.invalid/ffmpeg",
+                "version": "7.1",
+                "licence_status": status,
+            }
             for name in ("ffmpeg", "ffprobe")
         ],
     }))
@@ -70,24 +76,110 @@ def test_redistributed_binary_manifest_rejects_wrong_top_level_type(tmp_path):
         packaging_mod.validate_redistributed_binary_licences(manifest)
 
 
-def test_macos_release_lock_requires_real_hashes(tmp_path):
-    direct_inventory = tmp_path / "macos-arm64.lock"
-    direct_inventory.write_text("PySide6==6.11.2\n")
-    with pytest.raises(PackagingError, match="transitive.*hash",):
-        packaging_mod.validate_macos_release_lock(direct_inventory)
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda data: data["binaries"].append(dict(data["binaries"][0])),
+        lambda data: data["binaries"][0].update(extra="unexpected"),
+        lambda data: data["binaries"][0].pop("source"),
+        lambda data: data["binaries"].__setitem__(0, "ffmpeg"),
+        lambda data: data["binaries"][0].update(name=[]),
+    ],
+)
+def test_redistributed_binary_manifest_rejects_adversarial_entries(tmp_path, mutation):
+    manifest = _binary_manifest(tmp_path / "licenses.json")
+    data = json.loads(manifest.read_text())
+    mutation(data)
+    manifest.write_text(json.dumps(data))
+    with pytest.raises(PackagingError, match="schema|duplicate|fields"):
+        packaging_mod.validate_redistributed_binary_licences(manifest)
+
+
+def _write_inventory(path):
+    path.write_text("app-one==1.0\napp-two==2.0\n")
+    return path
+
+
+def _hashed(name, version="1.0", digest="a" * 64):
+    return f"{name}=={version} --hash=sha256:{digest}"
+
+
+def _complete_lock_lines():
+    transitives = ["torch", "numpy", "onnxruntime", "librosa", "pydub"]
+    return [_hashed("app-one"), _hashed("app-two", "2.0"), *[_hashed(name) for name in transitives]]
 
 
 def test_macos_release_lock_accepts_hashed_inventory(tmp_path):
+    inventory = _write_inventory(tmp_path / "direct.lock")
     lock = tmp_path / "transitive.lock"
-    lock.write_text("dependency==1.0 --hash=sha256:" + "a" * 64 + "\n")
-    assert packaging_mod.validate_macos_release_lock(lock) == lock
+    lock.write_text("\n".join(_complete_lock_lines()) + "\n")
+    assert packaging_mod.validate_macos_release_lock(lock, inventory) == lock
 
 
 def test_macos_release_lock_rejects_malformed_hash(tmp_path):
+    inventory = _write_inventory(tmp_path / "direct.lock")
     lock = tmp_path / "transitive.lock"
-    lock.write_text("dependency==1.0 --hash=sha256:not-a-hash\n")
-    with pytest.raises(PackagingError, match="transitive.*hash"):
-        packaging_mod.validate_macos_release_lock(lock)
+    lines = _complete_lock_lines()
+    lines[0] = _hashed("app-one", digest="not-a-hash")
+    lock.write_text("\n".join(lines) + "\n")
+    with pytest.raises(PackagingError, match="app-one.*hash"):
+        packaging_mod.validate_macos_release_lock(lock, inventory)
+
+
+@pytest.mark.parametrize(
+    "bad_line",
+    [
+        "dependency>=1.0 --hash=sha256:" + "a" * 64,
+        "-r other.lock",
+        "dependency @ https://example.invalid/pkg.whl --hash=sha256:" + "a" * 64,
+        "dependency==1.0; python_version > '3' --hash=sha256:" + "a" * 64,
+    ],
+)
+def test_macos_release_lock_rejects_unsupported_requirement_lines(tmp_path, bad_line):
+    inventory = _write_inventory(tmp_path / "direct.lock")
+    lock = tmp_path / "transitive.lock"
+    lock.write_text("\n".join([*_complete_lock_lines(), bad_line]) + "\n")
+    with pytest.raises(PackagingError, match="unsupported"):
+        packaging_mod.validate_macos_release_lock(lock, inventory)
+
+
+def test_macos_release_lock_rejects_duplicate_dependency(tmp_path):
+    inventory = _write_inventory(tmp_path / "direct.lock")
+    lock = tmp_path / "transitive.lock"
+    lines = _complete_lock_lines()
+    lock.write_text("\n".join([*lines, lines[0]]) + "\n")
+    with pytest.raises(PackagingError, match="duplicate"):
+        packaging_mod.validate_macos_release_lock(lock, inventory)
+
+
+def test_macos_release_lock_requires_all_direct_and_critical_transitives(tmp_path):
+    inventory = _write_inventory(tmp_path / "direct.lock")
+    lock = tmp_path / "transitive.lock"
+    lock.write_text("\n".join(_complete_lock_lines()[:-1]) + "\n")
+    with pytest.raises(PackagingError, match="pydub"):
+        packaging_mod.validate_macos_release_lock(lock, inventory)
+
+    lock.write_text("\n".join(_complete_lock_lines()[1:]) + "\n")
+    with pytest.raises(PackagingError, match="app-one"):
+        packaging_mod.validate_macos_release_lock(lock, inventory)
+
+
+def test_macos_release_lock_preserves_direct_versions(tmp_path):
+    inventory = _write_inventory(tmp_path / "direct.lock")
+    lock = tmp_path / "transitive.lock"
+    lines = _complete_lock_lines()
+    lines[0] = _hashed("app-one", version="9.9")
+    lock.write_text("\n".join(lines) + "\n")
+    with pytest.raises(PackagingError, match="version.*app-one"):
+        packaging_mod.validate_macos_release_lock(lock, inventory)
+
+
+def test_macos_release_lock_must_strictly_exceed_direct_inventory(tmp_path):
+    inventory = _write_inventory(tmp_path / "direct.lock")
+    lock = tmp_path / "transitive.lock"
+    lock.write_text("\n".join([_hashed("app-one"), _hashed("app-two")]) + "\n")
+    with pytest.raises(PackagingError, match="strict superset"):
+        packaging_mod.validate_macos_release_lock(lock, inventory)
 
 
 def test_ffmpeg_smoke_runs_controlled_executable_without_system_path(tmp_path):

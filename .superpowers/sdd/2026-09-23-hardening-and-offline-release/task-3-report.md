@@ -62,3 +62,26 @@ Review verification:
   — 86 passed, 1 deselected.
 - `python -m pytest -q` with `QT_QPA_PLATFORM=offscreen`
   — 352 passed, 2 deselected.
+
+## Review Round 2
+
+- The macOS lock validator parses every useful line and accepts only exact
+  `name==version` requirements with at least one real 64-hex SHA-256. It rejects
+  options/includes, URLs, markers, malformed hashes and canonical-name
+  duplicates.
+- A release lock must preserve every direct version, strictly exceed the direct
+  inventory, and contain the documented critical transitives `torch`, `numpy`,
+  `onnxruntime`, `librosa` and `pydub`.
+- Tagged workflows install exclusively from the validated transitive lock using
+  `pip install --require-hashes`; manual development builds use the direct
+  inventory. The real transitive lock remains absent and therefore gates tags.
+- The redistributed-binary manifest now has a closed schema with exactly unique
+  ffmpeg/ffprobe entries and typed `licence`, `source`, `version`, and status
+  fields. Unknown repository values remain explicit release blockers.
+
+Round 2 verification:
+
+- `python -m pytest tests/packaging tests/core/test_platform.py tests/ui/test_paths.py -q`
+  — 99 passed, 1 deselected.
+- `python -m pytest -q` with `QT_QPA_PLATFORM=offscreen`
+  — 365 passed, 2 deselected.
