@@ -10,7 +10,11 @@ from separateur_de_stems.core.models import STEM_TO_MODEL
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 
 
-class BundleManifestError(ValueError):
+class PackagingError(ValueError):
+    """Invalid or unreadable input required to package a release."""
+
+
+class BundleManifestError(PackagingError):
     pass
 
 
@@ -19,6 +23,8 @@ def validate_model_bundle(model_dir, *, require_distributable=False):
     manifest_path = root / "manifest.json"
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except UnicodeDecodeError as error:
+        raise BundleManifestError(f"Model manifest is not valid UTF-8: {error}") from error
     except (OSError, json.JSONDecodeError) as error:
         raise BundleManifestError(f"Model manifest is missing or invalid: {error}") from error
 

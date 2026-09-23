@@ -85,3 +85,19 @@ Round 2 verification:
   — 99 passed, 1 deselected.
 - `python -m pytest -q` with `QT_QPA_PLATFORM=offscreen`
   — 365 passed, 2 deselected.
+
+## Review Round 3
+
+- Invalid UTF-8 in the model manifest, redistributed-binary licence manifest,
+  transitive lock, or direct inventory is converted to a contextual
+  `PackagingError` (with `BundleManifestError` remaining the model-specific
+  subtype). Filesystem and JSON read failures remain contextualized as well.
+- Requirement lines now permit exactly one `==` between a canonicalizable
+  package name and a non-empty version. `===`, alternate operators, repeated
+  `==`, and leading/trailing or operator-adjacent ambiguous spaces are rejected.
+
+Round 3 verification:
+
+- `python -m pytest tests/packaging -q` — 74 passed, 1 deselected.
+- `python -m pytest -q` with `QT_QPA_PLATFORM=offscreen`
+  — 376 passed, 2 deselected.

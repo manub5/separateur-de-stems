@@ -76,6 +76,13 @@ def test_redistributed_binary_manifest_rejects_wrong_top_level_type(tmp_path):
         packaging_mod.validate_redistributed_binary_licences(manifest)
 
 
+def test_redistributed_binary_manifest_invalid_utf8_is_contextual(tmp_path):
+    manifest = tmp_path / "licenses.json"
+    manifest.write_bytes(b"\xff")
+    with pytest.raises(PackagingError, match="binary licence manifest.*UTF-8"):
+        packaging_mod.validate_redistributed_binary_licences(manifest)
+
+
 @pytest.mark.parametrize(
     "mutation",
     [
@@ -179,6 +186,43 @@ def test_macos_release_lock_must_strictly_exceed_direct_inventory(tmp_path):
     lock = tmp_path / "transitive.lock"
     lock.write_text("\n".join([_hashed("app-one"), _hashed("app-two")]) + "\n")
     with pytest.raises(PackagingError, match="strict superset"):
+        packaging_mod.validate_macos_release_lock(lock, inventory)
+
+
+def test_macos_release_lock_invalid_utf8_is_contextual(tmp_path):
+    inventory = _write_inventory(tmp_path / "direct.lock")
+    lock = tmp_path / "transitive.lock"
+    lock.write_bytes(b"\xff")
+    with pytest.raises(PackagingError, match="transitive lock.*UTF-8"):
+        packaging_mod.validate_macos_release_lock(lock, inventory)
+
+
+def test_macos_direct_inventory_invalid_utf8_is_contextual(tmp_path):
+    inventory = tmp_path / "direct.lock"
+    inventory.write_bytes(b"\xff")
+    lock = tmp_path / "transitive.lock"
+    lock.write_text("\n".join(_complete_lock_lines()) + "\n")
+    with pytest.raises(PackagingError, match="direct dependency inventory.*UTF-8"):
+        packaging_mod.validate_macos_release_lock(lock, inventory)
+
+
+@pytest.mark.parametrize(
+    "requirement",
+    [
+        "package===1.0 --hash=sha256:" + "a" * 64,
+        "package>=1.0 --hash=sha256:" + "a" * 64,
+        "package==1.0==extra --hash=sha256:" + "a" * 64,
+        "package ==1.0 --hash=sha256:" + "a" * 64,
+        "package== 1.0 --hash=sha256:" + "a" * 64,
+        " package==1.0 --hash=sha256:" + "a" * 64,
+        "package==1.0 --hash=sha256:" + "a" * 64 + " ",
+    ],
+)
+def test_macos_release_lock_rejects_ambiguous_exact_versions(tmp_path, requirement):
+    inventory = _write_inventory(tmp_path / "direct.lock")
+    lock = tmp_path / "transitive.lock"
+    lock.write_text("\n".join([*_complete_lock_lines(), requirement]) + "\n")
+    with pytest.raises(PackagingError, match="unsupported"):
         packaging_mod.validate_macos_release_lock(lock, inventory)
 
 

@@ -5,22 +5,26 @@ import json
 import re
 from pathlib import Path
 
-from separateur_de_stems.core.bundle_manifest import BundleManifestError, validate_model_bundle
+from separateur_de_stems.core.bundle_manifest import (
+    BundleManifestError,
+    PackagingError,
+    validate_model_bundle,
+)
 
 _BINARY_FIELDS = {"name", "licence", "source", "version", "licence_status"}
 _BINARY_NAMES = {"ffmpeg", "ffprobe"}
 _LICENCE_STATUSES = {"distributable", "not-distributable", "unknown"}
 _REQUIREMENT = re.compile(
-    r"(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)==(?P<version>[^\s;@]+)"
+    r"(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)==(?P<version>[^\s;@=]+)"
     r"(?P<hashes>(?:\s+--hash=sha256:[0-9a-f]{64})+)"
+)
+_MALFORMED_HASH_REQUIREMENT = re.compile(
+    r"(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)==[^\s;@=]+"
+    r"\s+--hash=sha256:\S+"
 )
 # These are exercised by the application and must appear in a credible lock
 # produced from audio-separator and the direct audio/runtime dependencies.
 _CRITICAL_MACOS_TRANSITIVES = {"librosa", "numpy", "onnxruntime", "pydub", "torch"}
-
-
-class PackagingError(RuntimeError):
-    pass
 
 
 def validate_build_inputs(models_dir, translations_dir, ffmpeg, ffprobe, binary_licences):
@@ -41,6 +45,10 @@ def validate_build_inputs(models_dir, translations_dir, ffmpeg, ffprobe, binary_
 def validate_redistributed_binary_licences(manifest_path):
     try:
         manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+    except UnicodeDecodeError as error:
+        raise PackagingError(
+            f"Redistributed binary licence manifest is not valid UTF-8: {error}"
+        ) from error
     except (OSError, json.JSONDecodeError) as error:
         raise PackagingError(f"Redistributed binary licence manifest is invalid: {error}") from error
     if not isinstance(manifest, dict) or set(manifest) != {"schema_version", "binaries"}:
@@ -75,11 +83,17 @@ def validate_macos_release_lock(lock_path, direct_inventory_path="requirements/m
     path = Path(lock_path)
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
+    except UnicodeDecodeError as error:
+        raise PackagingError(f"macOS transitive lock is not valid UTF-8: {error}") from error
     except OSError as error:
         raise PackagingError(f"macOS transitive lock with hashes is absent: {error}") from error
     requirements = _parse_requirements(lines, require_hashes=True)
     try:
         direct_lines = Path(direct_inventory_path).read_text(encoding="utf-8").splitlines()
+    except UnicodeDecodeError as error:
+        raise PackagingError(
+            f"macOS direct dependency inventory is not valid UTF-8: {error}"
+        ) from error
     except OSError as error:
         raise PackagingError(f"macOS direct dependency inventory is absent: {error}") from error
     direct = _parse_requirements(direct_lines, require_hashes=False)
@@ -108,6 +122,8 @@ def _parse_requirements(lines, *, require_hashes):
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
+        if line != raw_line:
+            raise PackagingError(f"unsupported requirement whitespace at line {line_number}")
         if require_hashes:
             match = _REQUIREMENT.fullmatch(line)
         else:
@@ -117,8 +133,11 @@ def _parse_requirements(lines, *, require_hashes):
             )
         if match is None:
             name = line.split("==", 1)[0] if "==" in line else f"line {line_number}"
-            if "==" in line and "--hash=sha256:" in line and ";" not in line:
-                raise PackagingError(f"Requirement {name} has an invalid or missing SHA-256 hash")
+            malformed_hash = _MALFORMED_HASH_REQUIREMENT.fullmatch(line)
+            if malformed_hash:
+                raise PackagingError(
+                    f"Requirement {malformed_hash.group('name')} has an invalid or missing SHA-256 hash"
+                )
             raise PackagingError(f"unsupported requirement syntax at line {line_number}: {line}")
         name = re.sub(r"[-_.]+", "-", match.group("name")).lower()
         if name in parsed:

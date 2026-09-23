@@ -5,6 +5,7 @@ import pytest
 
 from separateur_de_stems.core.bundle_manifest import BundleManifestError, validate_model_bundle
 from separateur_de_stems.core.models import STEM_TO_MODEL
+from separateur_de_stems.core.packaging import PackagingError
 
 
 def _entry(filename, payload=b"payload", **overrides):
@@ -42,6 +43,12 @@ def _write_complete_bundle(root, *, mutate=None):
 def test_repository_manifest_explicitly_blocks_distribution():
     with pytest.raises(BundleManifestError, match="sha256|unknown"):
         validate_model_bundle("models", require_distributable=True)
+
+
+def test_model_manifest_invalid_utf8_is_contextual_packaging_error(tmp_path):
+    (tmp_path / "manifest.json").write_bytes(b"\xff")
+    with pytest.raises(PackagingError, match="Model manifest.*UTF-8"):
+        validate_model_bundle(tmp_path)
 
 
 def test_complete_manifest_validates_every_selected_model(tmp_path):
