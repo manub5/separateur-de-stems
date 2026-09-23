@@ -237,6 +237,10 @@ def test_macos_direct_inventory_rejects_ambiguous_exact_versions(
     [
         "package===1.0 --hash=sha256:" + "a" * 64,
         "package>=1.0 --hash=sha256:" + "a" * 64,
+        "package==>1.0 --hash=sha256:" + "a" * 64,
+        "package==<1.0 --hash=sha256:" + "a" * 64,
+        "package==~=1.0 --hash=sha256:" + "a" * 64,
+        "package==!=1.0 --hash=sha256:" + "a" * 64,
         "package==1.0==extra --hash=sha256:" + "a" * 64,
         "package ==1.0 --hash=sha256:" + "a" * 64,
         "package== 1.0 --hash=sha256:" + "a" * 64,
@@ -248,7 +252,7 @@ def test_macos_release_lock_rejects_ambiguous_exact_versions(tmp_path, requireme
     inventory = _write_inventory(tmp_path / "direct.lock")
     lock = tmp_path / "transitive.lock"
     lock.write_text("\n".join([*_complete_lock_lines(), requirement]) + "\n")
-    with pytest.raises(PackagingError, match="unsupported"):
+    with pytest.raises(PackagingError, match="unsupported|invalid"):
         packaging_mod.validate_macos_release_lock(lock, inventory)
 
 
