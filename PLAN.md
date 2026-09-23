@@ -12,7 +12,7 @@
 - [x] Task 2 — isoler le pipeline, déplacer les exports hors GUI et confiner le nettoyage.
 - [x] Task 3 — imposer les actifs hors ligne et les gates de publication reproductible.
 - [x] Task 4 — aligner documentation, licences inconnues et état de publication bloqué.
-- [ ] Task 5 — exécuter le gate qualité complet ; la validation macOS arm64 et le build distribuable restent conditionnés aux actifs et licences manquants.
+- [x] Task 5 — exécuter le gate qualité complet ; la validation macOS arm64 et le build distribuable restent conditionnés aux actifs et licences manquants.
 - [x] Revue finale — migrer le manifeste modèles vers un inventaire hashé exhaustif et refuser les poids Demucs non inventoriés.
 - [x] Revue finale — faire échouer explicitement la résolution des modèles d'un bundle frozen incomplet.
 - [x] Revue finale — lier le manifeste ffmpeg/ffprobe aux binaires réels (hash, version, architecture et dépendances injectables).

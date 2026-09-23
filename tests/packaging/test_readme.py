@@ -138,6 +138,7 @@ def test_release_documents_record_demucs_and_task_status_honestly():
     assert "Aucun poids `.th` n'est inventorié" in models
     assert "état antérieur, supersédé" in progress
     assert "Task 4" in progress.partition("## Fait")[2].partition("## À faire")[0]
+    assert "Task 5" in progress.partition("## Fait")[2].partition("## À faire")[0]
     assert "Revue finale terminée" in progress.partition("## Fait")[2].partition("## À faire")[0]
     assert "macOS arm64" in progress.partition("## À faire")[2].partition("## Bloqué")[0]
     assert "## D-011 — Packaging PyInstaller et gates de publication" in decisions
@@ -149,5 +150,6 @@ def test_implementation_plan_matches_completed_task_status():
     remaining = plan.partition("### Task 5:")[2]
     assert "- [ ]" not in completed
     assert completed.count("- [x]") == 22
-    assert "- [x]" not in remaining
-    assert remaining.count("- [ ]") == 7
+    assert remaining.count("- [x]") == 5
+    assert remaining.count("- [ ]") == 2
+    assert remaining.count("BLOCKED:") == 2

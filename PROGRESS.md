@@ -25,6 +25,9 @@
   ligne et manifeste de modèles.
 - Task 4 terminée : README bilingue, notices, questions et état de publication
   alignés sur les comportements durcis et les blockers vérifiés.
+- Task 5 terminée : 427 tests rapides et le gate lent exécutés, traductions à
+  jour, hooks pre-commit/semgrep/gitleaks passés et revue finale approuvée. Le
+  build et son smoke restent bloqués avant artefact par les gates stricts.
 - Revue finale terminée : inventaire hashé exhaustif des actifs, résolution
   frozen fail-closed et validation des vrais ffmpeg/ffprobe avant artefact
   (hash, version, architecture et dépendances macOS).

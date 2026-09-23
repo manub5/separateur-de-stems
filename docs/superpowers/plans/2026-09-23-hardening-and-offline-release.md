@@ -117,10 +117,14 @@
 **Files:**
 - Modify only files required by failures discovered in this task.
 
-- [ ] Run `QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q`.
-- [ ] Run `QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -m slow -q`.
-- [ ] Run `.venv/bin/python scripts/build_translations.py --check`.
-- [ ] Run `PRE_COMMIT_HOME="$PWD/.cache/pre-commit" pre-commit run --all-files`.
-- [ ] Build the Linux bundle and inspect ffmpeg, ffprobe, translations, and all selected model assets.
-- [ ] Smoke-test the frozen binary in an environment without system ffmpeg and with network access disabled where supported.
-- [ ] Review the full branch against the spec, fix only verified regressions, rerun affected and full checks, then commit any final correction.
+- [x] Run `QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q`.
+- [x] Run `QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -m slow -q`.
+- [x] Run `.venv/bin/python scripts/build_translations.py --check`.
+- [x] Run `PRE_COMMIT_HOME="$PWD/.cache/pre-commit" pre-commit run --all-files`.
+- [ ] BLOCKED: build the Linux bundle and inspect ffmpeg, ffprobe, translations,
+  and all selected model assets. The strict release gate correctly rejects the
+  incomplete model and binary manifests before artifact creation.
+- [ ] BLOCKED: smoke-test the frozen binary without system ffmpeg or network.
+  No bundle is created until the required assets, licences and lock are valid.
+- [x] Review the full branch against the spec, fix verified regressions, and
+  rerun affected and full checks.
