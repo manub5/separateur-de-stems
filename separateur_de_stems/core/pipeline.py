@@ -90,7 +90,7 @@ def run_pipeline(
             raise OutputError(
                 f"No deliverable produced for: {', '.join(sorted(incomplete))}"
             )
-        _report(progress_cb, 100, "pipeline.complete")
+        _notify_completion(progress_cb)
         return result
     finally:
         shutil.rmtree(workspace, ignore_errors=True)
@@ -162,7 +162,12 @@ def _finalize_outputs(
     if missing_deliverables:
         raise OutputError(f"Export did not create: {missing_deliverables[0]}")
     _raise_if_cancelled(cancel_requested)
-    (rename_publisher or _rename_no_replace)(staged_song_dir, final_song_dir)
+    try:
+        (rename_publisher or _rename_no_replace)(staged_song_dir, final_song_dir)
+    except OSError as error:
+        raise OutputError(
+            f"Failed to publish completed outputs to {final_song_dir}: {error}"
+        ) from error
     return [str(final_song_dir / path.name) for path in exported]
 
 
@@ -174,6 +179,14 @@ def _report_export(progress_cb, completed, total, stage):
 def _report(progress_cb, percent, stage):
     if progress_cb is not None:
         progress_cb(percent, stage)
+
+
+def _notify_completion(progress_cb):
+    """Notify observers after commit without invalidating published success."""
+    try:
+        _report(progress_cb, 100, "pipeline.complete")
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _raise_if_cancelled(cancel_requested):

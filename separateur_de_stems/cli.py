@@ -3,13 +3,11 @@
 import argparse
 import logging
 import sys
-from pathlib import Path
 from typing import Optional
 
 from separateur_de_stems.core.catalog import fetch_catalog, top_models_for_stem
 from separateur_de_stems.core.errors import (
     CancelledError,
-    OutputError,
     StemSeparatorError,
 )
 from separateur_de_stems.core.models import STEM_TO_MODEL
@@ -118,15 +116,6 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 2
 
     return 0
-
-
-def _ensure_output_dir(output_dir: str) -> None:
-    try:
-        Path(output_dir).mkdir(parents=True, exist_ok=True)
-    except OSError as error:
-        raise OutputError(
-            f"Impossible de créer le dossier de sortie {output_dir} : {error}"
-        ) from error
 
 
 def _print_progress(percent: int, message: str) -> None:

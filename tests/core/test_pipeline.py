@@ -67,22 +67,23 @@ def test_pipeline_partial_failure_publishes_nothing_and_preserves_external_path(
     external = tmp_path / "external.wav"
     external.write_bytes(b"keep")
 
+    workspace_seen = []
+
     def behavior(workspace, stems, progress_cb):
-        partial = workspace / "partial.wav"
-        partial.write_bytes(b"partial")
-        raise OutputError("second model failed")
+        workspace_seen.append(workspace)
+        return {"vocals": str(external)}
 
     FakeEngine.behavior = staticmethod(behavior)
     monkeypatch.setattr(pipeline, "SeparationEngine", FakeEngine)
 
-    with pytest.raises(OutputError, match="second model failed"):
+    with pytest.raises(OutputError, match="outside the private workspace"):
         pipeline.run_pipeline(
-            str(source), {"vocals", "drums"}, str(output_dir), str(tmp_path / "models")
+            str(source), {"vocals"}, str(output_dir), str(tmp_path / "models")
         )
 
     assert external.read_bytes() == b"keep"
     assert not (output_dir / "song").exists()
-    assert not list(output_dir.glob(".stem-run-*"))
+    assert workspace_seen and not workspace_seen[0].exists()
 
 
 def test_pipeline_rejects_external_workspace_without_deleting_it(tmp_path):
@@ -133,3 +134,99 @@ def test_pipeline_rejects_incomplete_result_and_reserves_progress_for_export(
 
     assert events[-1][0] <= 80
     assert not (output_dir / "song").exists()
+
+
+def test_pipeline_wraps_native_publication_failure_as_output_error(
+    tmp_path, monkeypatch
+):
+    source = _source(tmp_path)
+    output_dir = tmp_path / "out"
+    _exporters(monkeypatch)
+
+    def behavior(workspace, stems, progress_cb):
+        vocals = workspace / "vocals.wav"
+        vocals.write_bytes(b"vocals")
+        return {"vocals": str(vocals)}
+
+    def fail_publish(source_path, destination_path):
+        raise OSError(18, "cross-device")
+
+    FakeEngine.behavior = staticmethod(behavior)
+    monkeypatch.setattr(pipeline, "SeparationEngine", FakeEngine)
+    monkeypatch.setattr(pipeline, "_rename_no_replace", fail_publish)
+
+    with pytest.raises(OutputError, match="publish") as exc_info:
+        pipeline.run_pipeline(
+            str(source), {"vocals"}, str(output_dir), str(tmp_path / "models")
+        )
+
+    assert isinstance(exc_info.value.__cause__, OSError)
+    assert not (output_dir / "song").exists()
+
+
+def test_terminal_progress_failure_does_not_turn_published_success_into_failure(
+    tmp_path, monkeypatch
+):
+    source = _source(tmp_path)
+    output_dir = tmp_path / "out"
+    _exporters(monkeypatch)
+
+    def behavior(workspace, stems, progress_cb):
+        vocals = workspace / "vocals.wav"
+        vocals.write_bytes(b"vocals")
+        return {"vocals": str(vocals)}
+
+    def progress(percent, stage):
+        if percent == 100:
+            raise RuntimeError("observer failed")
+
+    FakeEngine.behavior = staticmethod(behavior)
+    monkeypatch.setattr(pipeline, "SeparationEngine", FakeEngine)
+
+    result = pipeline.run_pipeline(
+        str(source),
+        {"vocals"},
+        str(output_dir),
+        str(tmp_path / "models"),
+        progress_cb=progress,
+    )
+
+    assert all(Path(path).is_file() for path in result["vocals"])
+
+
+def test_pipeline_reports_ordered_export_progress_only_before_terminal_success(
+    tmp_path, monkeypatch
+):
+    source = _source(tmp_path)
+    output_dir = tmp_path / "out"
+    events = []
+    _exporters(monkeypatch)
+
+    def behavior(workspace, stems, progress_cb):
+        progress_cb(100, "separation.complete")
+        vocals = workspace / "vocals.wav"
+        vocals.write_bytes(b"vocals")
+        return {"vocals": str(vocals)}
+
+    FakeEngine.behavior = staticmethod(behavior)
+    monkeypatch.setattr(pipeline, "SeparationEngine", FakeEngine)
+
+    result = pipeline.run_pipeline(
+        str(source),
+        {"vocals"},
+        str(output_dir),
+        str(tmp_path / "models"),
+        progress_cb=lambda percent, stage: events.append(
+            (percent, stage, (output_dir / "song").exists())
+        ),
+    )
+
+    export_events = [event for event in events if event[1].startswith("export.")]
+    assert [stage for _, stage, _ in export_events] == ["export.wav", "export.mp3"]
+    assert all(81 <= percent <= 99 for percent, _, _ in export_events)
+    assert [percent for percent, _, _ in events] == sorted(
+        percent for percent, _, _ in events
+    )
+    assert events[-1] == (100, "pipeline.complete", True)
+    assert sum(percent == 100 for percent, _, _ in events) == 1
+    assert all(Path(path).is_file() for path in result["vocals"])

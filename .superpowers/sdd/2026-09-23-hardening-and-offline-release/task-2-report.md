@@ -80,3 +80,61 @@ The warning is the existing Python 3.12 `audioop` deprecation emitted by
 
 The native macOS `renamex_np(..., RENAME_EXCL)` publication path cannot be
 executed on Linux and remains contingent on the macOS arm64 workflow.
+
+## Review Fix Round 1
+
+- Separator construction and `load_model()` now have distinct
+  `ModelUnavailableError` messages that identify the failed boundary and model.
+- Every native no-replace publication `OSError`, including destination races and
+  cross-device failures, is converted to contextual `OutputError` with the
+  native exception retained as `__cause__`.
+- The terminal 100% progress notification is explicitly best-effort after the
+  atomic commit. An observer failure can no longer report failure after outputs
+  have already been published.
+- The external-output pipeline regression now returns an actual external model
+  output and verifies `OutputError`, no publication, preservation of the
+  external file, and workspace cleanup.
+- Successful progress coverage verifies ordered `export.wav`/`export.mp3`
+  stages in 81–99 and one terminal 100 event only after the final directory is
+  visible.
+- Auxiliary-output confinement now uses existing internal and external files,
+  preserves both sources, and verifies that no deliverable is produced.
+- Removed the unused CLI `_ensure_output_dir`, `Path`, and `OutputError` import.
+
+TDD red verification produced the three expected failures: factory errors were
+reported as load failures, native publication leaked `OSError`, and a throwing
+terminal observer converted an already-published success into failure. Focused
+green verification:
+
+```text
+../../.venv/bin/python -m pytest \
+  tests/core/test_engine.py::test_engine_maps_separator_factory_failure_to_model_error \
+  tests/core/test_engine.py::test_engine_maps_load_model_failure_to_model_error \
+  tests/core/test_engine.py::test_engine_rejects_any_auxiliary_output_outside_private_directory \
+  tests/core/test_pipeline.py::test_pipeline_partial_failure_publishes_nothing_and_preserves_external_path \
+  tests/core/test_pipeline.py::test_pipeline_wraps_native_publication_failure_as_output_error \
+  tests/core/test_pipeline.py::test_terminal_progress_failure_does_not_turn_published_success_into_failure \
+  tests/core/test_pipeline.py::test_pipeline_reports_ordered_export_progress_only_before_terminal_success -q
+7 passed in 0.05s
+```
+
+Affected-suite verification before final gate:
+
+```text
+QT_QPA_PLATFORM=offscreen ../../.venv/bin/python -m pytest \
+  tests/core/test_engine.py tests/core/test_pipeline.py tests/test_cli.py \
+  tests/ui/test_worker.py -q
+86 passed in 2.91s
+```
+
+Final gate before commit:
+
+```text
+Affected suite: 86 passed in 3.56s
+Core + CLI + complete offscreen UI suite: 302 passed, 1 warning in 9.20s
+Translation freshness check: exit 0
+git diff --check: exit 0
+```
+
+The warning remains the pre-existing Python 3.12 `audioop` deprecation from
+`pydub`.

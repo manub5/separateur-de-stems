@@ -399,7 +399,7 @@ def test_existing_song_directory_is_preserved_without_overwrite(tmp_path):
     raw = Path(context.workspace) / "vocals.wav"
     raw.write_bytes(b"new")
 
-    with pytest.raises(FileExistsError):
+    with pytest.raises(OutputError, match="publish") as exc_info:
         worker_module._finalize_outputs(
             context,
             {"vocals": str(raw)},
@@ -407,6 +407,7 @@ def test_existing_song_directory_is_preserved_without_overwrite(tmp_path):
             mp3_exporter=_cancellable_writing_exporter,
         )
 
+    assert isinstance(exc_info.value.__cause__, FileExistsError)
     assert existing.read_bytes() == b"keep"
 
 
@@ -421,7 +422,7 @@ def test_existing_destination_path_is_never_replaced(tmp_path, destination_kind)
     raw = Path(context.workspace) / "vocals.wav"
     raw.write_bytes(b"new")
 
-    with pytest.raises(FileExistsError):
+    with pytest.raises(OutputError, match="publish") as exc_info:
         worker_module._finalize_outputs(
             context,
             {"vocals": str(raw)},
@@ -429,6 +430,7 @@ def test_existing_destination_path_is_never_replaced(tmp_path, destination_kind)
             mp3_exporter=_cancellable_writing_exporter,
         )
 
+    assert isinstance(exc_info.value.__cause__, FileExistsError)
     if destination_kind == "file":
         assert destination.read_bytes() == b"keep"
     else:
@@ -499,7 +501,7 @@ def test_atomic_publish_preserves_destination_winning_race(
 
     monkeypatch.setattr(worker_module, "_rename_no_replace", racing_rename)
 
-    with pytest.raises(FileExistsError):
+    with pytest.raises(OutputError, match="publish") as exc_info:
         worker_module._finalize_outputs(
             context,
             {"vocals": str(raw)},
@@ -507,6 +509,7 @@ def test_atomic_publish_preserves_destination_winning_race(
             mp3_exporter=_cancellable_writing_exporter,
         )
 
+    assert isinstance(exc_info.value.__cause__, FileExistsError)
     if conflict_kind == "file":
         assert final_dir.read_bytes() == b"preexisting"
     else:
@@ -523,7 +526,7 @@ def test_cross_device_publish_fails_without_visible_destination(tmp_path, monkey
 
     monkeypatch.setattr(worker_module, "_rename_no_replace", cross_device_rename)
 
-    with pytest.raises(OSError, match="cross-device"):
+    with pytest.raises(OutputError, match="cross-device") as exc_info:
         worker_module._finalize_outputs(
             context,
             {"vocals": str(raw)},
@@ -531,6 +534,7 @@ def test_cross_device_publish_fails_without_visible_destination(tmp_path, monkey
             mp3_exporter=_cancellable_writing_exporter,
         )
 
+    assert isinstance(exc_info.value.__cause__, OSError)
     assert (Path(context.output_dir) / "song").exists() is False
 
 

@@ -93,6 +93,13 @@ class SeparationEngine:
                     output_format="WAV",
                     log_level=self._log_level,
                 )
+            except StemSeparatorError:
+                raise
+            except Exception as error:  # noqa: BLE001
+                raise ModelUnavailableError(
+                    f"Cannot construct separator for {model.filename}: {error}"
+                ) from error
+            try:
                 separator.load_model(model.filename)
             except StemSeparatorError:
                 raise
