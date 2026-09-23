@@ -15,6 +15,12 @@ exige en plus la configuration
 `model_bs_roformer_ep_317_sdr_12.9755.yaml`, elle aussi absente. Les tailles et
 SHA-256 ne peuvent donc pas être calculés localement.
 
+Les fichiers Demucs `.yaml` du tableau sont des configurations, pas les poids
+du modèle. Poids `.th` : absents et pas complètement inventoriés dans
+`models/manifest.json`. Le gate ne peut donc pas prouver qu'un bundle
+contient tous les actifs Demucs requis ; cette lacune bloque explicitement la
+publication.
+
 Vérification du 2026-09-22 : la présence, le type et les valeurs SDR indiquées
 ci-dessus ont été vérifiés dans le catalogue réel d'`audio-separator` 0.47.0.
 Les tailles et les licences restent ouvertes et ne sont pas considérées comme

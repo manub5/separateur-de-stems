@@ -85,7 +85,7 @@ d'événements partagée : `QApplication.exec` est remplacé par un stub, car
 appeler `quit()` sur l'instance partagée corromprait les `waitSignal` des tests
 suivants (pollution inter-tests observée puis corrigée).
 
-## D-011 — Packaging PyInstaller
+## D-011 — Packaging PyInstaller et gates de publication
 
 Raison : livrer une application autonome sans dépendance à un ffmpeg ou un
 Python installés sur la machine cible, tout en gardant un bundle raisonnable.
@@ -126,10 +126,10 @@ Python installés sur la machine cible, tout en gardant un bundle raisonnable.
   par défaut sont CPU/MPS ; aucun extra CUDA n'est installé (la pile CUDA,
   multi-gigaoctets, n'existe que sous Linux). Le bundle Linux local pèse
   environ 5,8 Go précisément parce qu'il embarque la variante CUDA.
-- **Artefact macOS + repli GitHub Release** : le workflow produit
-  `StemSeparator-macos.zip` via `ditto` seulement après les gates hors ligne.
-  L'upload public d'un tag reste désactivé jusqu'à validation des licences et
-  du lock transitif hashé. La taille est mesurée avant tout upload.
+- **Gate et futur artefact macOS** : le workflow ne peut produire
+  `StemSeparator-macos.zip` via `ditto` qu'après les gates hors ligne. L'upload
+  public d'un tag reste désactivé jusqu'à validation des licences et du lock
+  transitif hashé. La taille est mesurée avant tout upload.
 - **Application non signée** : pas de signature ni de notarisation Apple
   (pas de certificat). Le README FR/EN décrit la procédure de premier lancement
   (Réglages Système > Confidentialité et sécurité > « Ouvrir quand même »).

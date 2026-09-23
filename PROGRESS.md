@@ -15,33 +15,26 @@
   `LanguageChange`/`retranslate_ui` (fenêtre, dialogue de réglages, zone de
   dépôt), langue chargée au démarrage, garde de fraîcheur du catalogue
   (`build(check=True)`). Suite de tests complète (267 tests) verte en offscreen.
-- Phase 2 / Plan C (packaging) terminé : empaquetage PyInstaller Linux
-  (`onedir`, `packaging/build_linux.sh`, modèles hors bundle, ffmpeg embarqué
-  résolu par `core.platform.ffmpeg_executable`, `.qm` committée embarquée) ;
-  workflow macOS Apple Silicon (`.github/workflows/build-macos.yml`, runner
-  `macos-14`, torch CPU/MPS, actions épinglées par SHA, test offscreen,
-  `.app` non signée compressée en artefact) ; README bilingue FR/EN
-  (`README.md`) documentant installation, CLI, UI, traductions, builds et
-  premier lancement macOS non signé. Suite de tests complète verte en
-  offscreen (dont `tests/packaging/test_readme.py`).
+- Phase 2 / Plan C, état antérieur, supersédé par le durcissement : un prototype
+  PyInstaller Linux et un workflow macOS avaient été préparés avec modèles hors
+  bundle. Cet état ne validait aucun artefact distribuable ni son exécution sur
+  macOS arm64.
 - Durcissement Tasks 1 à 3 terminé : état d'exécution UI immuable, annulation
   et fermeture asynchrones, pipeline/export hors GUI avec publication atomique,
   espace privé et nettoyage confiné, puis gates stricts d'empaquetage hors
   ligne et manifeste de modèles.
-
-## En cours
-
-- Task 4 : alignement de la documentation, des notices et de l'état de release.
+- Task 4 terminée : README bilingue, notices, questions et état de publication
+  alignés sur les comportements durcis et les blockers vérifiés.
 
 ## À faire
 
-- Compléter et valider légalement les actifs de `models/manifest.json`, puis
-  exécuter le workflow macOS arm64. Signature/notarisation Apple et accélération
-  MPS/CoreML restent ensuite à revérifier.
-- Task 5 : exécuter le gate qualité complet et les smokes réalisables.
+- Task 5 uniquement : exécuter le gate qualité complet et les smokes
+  réalisables. La validation macOS arm64 dépend encore des blockers ci-dessous.
 
 ## Bloqué
 
 - Build distribuable bloqué intentionnellement : poids/configurations/checksums
-  et licences des modèles incomplets ; métadonnées ffmpeg/ffprobe inconnues et
-  lock transitif macOS arm64 hashé absent.
+  et licences des modèles incomplets, dont les poids Demucs `.th` pas tous
+  inventoriés ; métadonnées ffmpeg/ffprobe inconnues et lock transitif macOS
+  arm64 hashé absent. MPS/CoreML, `renamex_np` et le `.app` final attendent une
+  validation sur runner macOS arm64.

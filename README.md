@@ -35,8 +35,8 @@ que l'espace privé de l'exécution.
 
 - Python `>=3.12,<3.13`, plage déclarée dans `pyproject.toml`.
 - ffmpeg et ffprobe accessibles pour l'usage en développement.
-- Un répertoire de modèles complet et validé ; aucun téléchargement implicite
-  ne fait partie du flux d'exécution.
+- Un répertoire de modèles local est recommandé pour maîtriser les actifs
+  utilisés.
 
 ```bash
 python3.12 -m venv .venv
@@ -52,8 +52,9 @@ separateur-de-stems-ui --file morceau.flac
 ```
 
 En développement, les modèles résident dans `models/` ou dans le répertoire
-explicitement choisi dans les réglages. Le CLI et l'interface exigent que les
-actifs nécessaires soient déjà disponibles localement.
+explicitement choisi dans les réglages. Si un actif manque,
+`audio-separator` peut télécharger et mettre en cache des fichiers selon son
+propre comportement. Le développement n'offre donc pas une garantie hors ligne.
 
 ### Traductions et tests
 
@@ -68,12 +69,13 @@ QT_QPA_PLATFORM=offscreen python -m pytest -q
 Le build de développement Linux se lance avec `packaging/build_linux.sh`. Le
 workflow macOS est `.github/workflows/build-macos.yml`.
 
-**PUBLICATION BLOQUÉE.** La configuration d'empaquetage impose les modèles,
-leurs configurations, `download_checks.json`, ffmpeg et ffprobe avant de créer
-un bundle hors ligne. `models/manifest.json` montre actuellement des poids,
-configurations, tailles, SHA-256, sources ou licences incomplets. Les licences,
-sources et versions des binaires restent inconnues dans
-`packaging/redistributed-binaries.json`. Enfin,
+**PUBLICATION BLOQUÉE.** Le bundle de publication vise un fonctionnement hors ligne.
+Son gate vérifie les actifs déclarés, leurs configurations,
+`download_checks.json`, ffmpeg et ffprobe avant le build. Le manifeste est
+incomplet : les poids Demucs `.th` nécessaires ne sont ni présents ni tous
+inventoriés, et d'autres poids, configurations, tailles, SHA-256, sources ou
+licences manquent. Les licences, sources et versions des binaires restent
+inconnues dans `packaging/redistributed-binaries.json`. Enfin,
 `requirements/macos-arm64.lock` n'est qu'un inventaire direct épinglé : le vrai
 `requirements/macos-arm64-transitive.lock` avec hashes n'existe pas encore.
 Aucun artefact public de tag n'est donc autorisé.
@@ -83,10 +85,10 @@ peut utiliser les actifs locaux et les outils du `PATH`; le second doit franchir
 toutes les validations du manifeste et embarquer modèles, ffmpeg et ffprobe.
 
 L'accélération macOS MPS/CoreML est déléguée à `audio-separator`.
-MPS/CoreML, `renamex_np` et le `.app` final restent non vérifiés jusqu'à l'exécution du
-workflow sur macOS arm64. L'application prévue est non signée ; au premier
-lancement, utiliser **Réglages Système > Confidentialité et sécurité > Ouvrir quand même**,
-puis saisir le mot de passe administrateur.
+MPS/CoreML, `renamex_np` et le `.app` final restent non vérifiés jusqu'à
+l'exécution du workflow sur macOS arm64. L'application prévue est non signée ;
+au premier lancement, utiliser **Réglages Système > Confidentialité et sécurité
+> Ouvrir quand même**, puis saisir le mot de passe administrateur.
 
 Les attributions vérifiées et les éléments en attente figurent dans
 `THIRD_PARTY_NOTICES.md`.
@@ -103,8 +105,9 @@ bass, guitar, piano, and instrumental/other. Model selection is documented in
 `MODELS.md`.
 
 Each run captures immutable configuration. Input, output, and settings controls
-remain locked until native `QThread.finished`. Cancellation and closing are asynchronous: they request shutdown without blocking the Qt event loop and wait
-for native thread completion.
+remain locked until native `QThread.finished`. Cancellation and closing are
+asynchronous: they request shutdown without blocking the Qt event loop and
+wait for native thread completion.
 
 Separation and WAV/MP3 exports run outside the GUI. Each batch uses a private
 workspace, performs bounded-block WAV conversion, supports cancellable ffmpeg,
@@ -116,8 +119,7 @@ cancellation cleans only that run's private workspace.
 
 - Python `>=3.12,<3.13`, as declared by `pyproject.toml`.
 - ffmpeg and ffprobe available for development use.
-- A complete validated model directory; runtime does not implicitly download
-  missing release assets.
+- A local model directory is recommended to control the assets being used.
 
 ```bash
 python3.12 -m venv .venv
@@ -133,7 +135,9 @@ separateur-de-stems-ui --file track.flac
 ```
 
 In development, models live in `models/` or in the directory explicitly chosen
-in settings. The CLI and GUI require all needed assets to exist locally.
+in settings. If an asset is missing, `audio-separator` may download and cache
+files according to its own behavior. Development therefore has no offline
+guarantee.
 
 ### Translations and tests
 
@@ -148,11 +152,13 @@ QT_QPA_PLATFORM=offscreen python -m pytest -q
 Run the Linux development build with `packaging/build_linux.sh`. The macOS
 workflow is `.github/workflows/build-macos.yml`.
 
-**PUBLIC RELEASE BLOCKED.** Packaging strictly requires models, their configs,
-`download_checks.json`, ffmpeg, and ffprobe before producing an offline bundle.
-`models/manifest.json` currently records incomplete payloads, configurations,
-sizes, SHA-256 hashes, sources, or licences. Binary licences, sources, and
-versions remain unknown in `packaging/redistributed-binaries.json`. Finally,
+**PUBLIC RELEASE BLOCKED.** The release bundle targets offline operation. Its
+gate verifies declared assets, their configs, `download_checks.json`, ffmpeg,
+and ffprobe before building. The manifest is incomplete: required Demucs
+weights in `.th` files are neither present nor all inventoried, and other
+payloads, configs, sizes, SHA-256 hashes, sources, or licences are missing. The
+licences, sources, and versions of redistributed binaries remain unknown in
+`packaging/redistributed-binaries.json`. Finally,
 `requirements/macos-arm64.lock` is only a pinned direct inventory; a true
 hashed `requirements/macos-arm64-transitive.lock` does not exist yet. No public
 tag artifact is therefore permitted.
@@ -162,9 +168,10 @@ tools from `PATH`; release must pass every manifest gate and bundle the models,
 ffmpeg, and ffprobe.
 
 macOS MPS/CoreML acceleration is delegated to `audio-separator`.
-MPS/CoreML, `renamex_np`, and the final `.app` remain unverified until the workflow runs on
-macOS arm64. The intended app is unsigned; on first launch use **System Settings
-> Privacy & Security > Open Anyway**, then enter the administrator password.
+MPS/CoreML, `renamex_np`, and the final `.app` remain unverified until the
+workflow runs on macOS arm64. The intended app is unsigned; on first launch use
+**System Settings > Privacy & Security > Open Anyway**, then enter the
+administrator password.
 
 Verified attributions and pending items are listed in
 `THIRD_PARTY_NOTICES.md`.
