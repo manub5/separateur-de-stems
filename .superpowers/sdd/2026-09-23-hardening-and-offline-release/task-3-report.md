@@ -38,3 +38,27 @@ fails clearly because the selected offline model manifest is incomplete.
   unverified locally and require the macOS arm64 workflow.
 - Direct macOS requirements are version-pinned but do not claim a fully hashed
   transitive lock.
+
+## Review Round 1
+
+- Manifest validation now requires exactly the unique `STEM_TO_MODEL` files,
+  declares `download_checks.json`, rejects duplicate models, and validates all
+  field types, positive sizes and 64-character lowercase SHA-256 values.
+- The translation gate requires a non-empty `stem_separator_fr.qm`.
+- The redundant UI `ffmpeg_dir` resolver was removed; executable resolution
+  remains centralized in `core.platform` with `is_file` and `X_OK` checks.
+- Added a separate ffmpeg/ffprobe redistribution-licence manifest. Unknown
+  licence data blocks both strict builds and tagged release validation.
+- Renamed the macOS input to `requirements/macos-arm64.lock` and documented it
+  as a strict direct inventory only. Tagged releases require a separate hashed
+  transitive lock generated and validated on macOS arm64; none was fabricated
+  on Linux and the workflow does not use `--require-hashes` without one.
+- Replaced the mocked smoke subprocess with controlled executable scripts that
+  prove `PATH` is empty and that missing MP3 output fails.
+
+Review verification:
+
+- `python -m pytest tests/packaging tests/core/test_platform.py tests/ui/test_paths.py -q`
+  — 86 passed, 1 deselected.
+- `python -m pytest -q` with `QT_QPA_PLATFORM=offscreen`
+  — 352 passed, 2 deselected.

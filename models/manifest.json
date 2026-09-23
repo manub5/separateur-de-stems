@@ -4,7 +4,7 @@
   "models": [
     {
       "filename": "vocals_mel_band_roformer.ckpt",
-      "config_files": null,
+      "config_files": [],
       "sha256": null,
       "size": null,
       "source": null,
@@ -22,7 +22,7 @@
     },
     {
       "filename": "htdemucs_ft.yaml",
-      "config_files": null,
+      "config_files": [],
       "sha256": null,
       "size": null,
       "source": "https://github.com/TRvlvr/model_repo/releases/download/all_public_uvr_models/htdemucs_ft.yaml",
@@ -31,7 +31,7 @@
     },
     {
       "filename": "hdemucs_mmi.yaml",
-      "config_files": null,
+      "config_files": [],
       "sha256": null,
       "size": null,
       "source": "https://github.com/TRvlvr/model_repo/releases/download/all_public_uvr_models/hdemucs_mmi.yaml",
@@ -40,7 +40,7 @@
     },
     {
       "filename": "htdemucs_6s.yaml",
-      "config_files": null,
+      "config_files": [],
       "sha256": null,
       "size": null,
       "source": "https://github.com/TRvlvr/model_repo/releases/download/all_public_uvr_models/htdemucs_6s.yaml",

@@ -20,7 +20,6 @@ __all__ = [
     "default_model_dir",
     "default_cache_dir",
     "default_output_dir",
-    "ffmpeg_dir",
 ]
 
 _APP_DIR_NAME = "StemSeparator"
@@ -73,14 +72,3 @@ def default_output_dir() -> str:
         if location:
             return location
     return str(Path.home())
-
-
-def ffmpeg_dir() -> str | None:
-    """Bundled ffmpeg directory, or None when it is not present."""
-    meipass = getattr(sys, "_MEIPASS", None)
-    if not meipass:
-        return None
-    candidate = Path(meipass) / "ffmpeg"
-    if candidate.is_dir():
-        return str(candidate)
-    return None

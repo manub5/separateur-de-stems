@@ -3,55 +3,107 @@ import json
 
 import pytest
 
-from separateur_de_stems.core.bundle_manifest import (
-    BundleManifestError,
-    validate_model_bundle,
-)
+from separateur_de_stems.core.bundle_manifest import BundleManifestError, validate_model_bundle
 from separateur_de_stems.core.models import STEM_TO_MODEL
 
 
-def test_repository_manifest_lists_every_selected_model():
-    manifest = json.loads(open("models/manifest.json").read())
-    assert {entry["filename"] for entry in manifest["models"]} == set(STEM_TO_MODEL.values())
-    for entry in manifest["models"]:
-        assert {"config_files", "sha256", "size", "source", "licence", "licence_status"} <= entry.keys()
+def _entry(filename, payload=b"payload", **overrides):
+    entry = {
+        "filename": filename,
+        "config_files": [],
+        "sha256": hashlib.sha256(payload).hexdigest(),
+        "size": len(payload),
+        "source": "https://example.invalid/model",
+        "licence": "MIT",
+        "licence_status": "distributable",
+    }
+    entry.update(overrides)
+    return entry
 
 
-def test_repository_manifest_explicitly_blocks_distribution():
-    with pytest.raises(BundleManifestError, match="not distributable|unknown"):
-        validate_model_bundle("models", require_distributable=True)
-
-
-def test_complete_manifest_validates_payload_config_and_check_file(tmp_path):
-    payload = tmp_path / "model.ckpt"
-    payload.write_bytes(b"payload")
-    (tmp_path / "model.yaml").write_text("config")
-    (tmp_path / "download_checks.json").write_text("{}")
+def _write_complete_bundle(root, *, mutate=None):
+    entries = []
+    for filename in sorted(set(STEM_TO_MODEL.values())):
+        payload = filename.encode()
+        (root / filename).write_bytes(payload)
+        entries.append(_entry(filename, payload))
+    (root / "download_checks.json").write_text("{}")
     manifest = {
         "schema_version": 1,
         "required_files": ["download_checks.json"],
-        "models": [{
-            "filename": "model.ckpt", "config_files": ["model.yaml"],
-            "sha256": hashlib.sha256(b"payload").hexdigest(), "size": 7,
-            "source": "https://example.invalid/model", "licence": "MIT",
-            "licence_status": "distributable"
-        }]
+        "models": entries,
     }
-    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    if mutate:
+        mutate(manifest)
+    (root / "manifest.json").write_text(json.dumps(manifest))
+    return manifest
 
-    assert validate_model_bundle(tmp_path, require_distributable=True) == [
-        payload, tmp_path / "model.yaml", tmp_path / "download_checks.json", tmp_path / "manifest.json"
-    ]
+
+def test_repository_manifest_explicitly_blocks_distribution():
+    with pytest.raises(BundleManifestError, match="sha256|unknown"):
+        validate_model_bundle("models", require_distributable=True)
 
 
-def test_manifest_rejects_checksum_mismatch(tmp_path):
-    (tmp_path / "model.ckpt").write_bytes(b"wrong")
-    (tmp_path / "download_checks.json").write_text("{}")
-    (tmp_path / "manifest.json").write_text(json.dumps({
-        "schema_version": 1, "required_files": ["download_checks.json"],
-        "models": [{"filename": "model.ckpt", "config_files": [], "sha256": "0" * 64,
-                    "size": 5, "source": "source", "licence": "MIT",
-                    "licence_status": "distributable"}]
-    }))
-    with pytest.raises(BundleManifestError, match="SHA-256"):
-        validate_model_bundle(tmp_path, require_distributable=True)
+def test_complete_manifest_validates_every_selected_model(tmp_path):
+    _write_complete_bundle(tmp_path)
+    assets = validate_model_bundle(tmp_path, require_distributable=True)
+    assert {path.name for path in assets} >= set(STEM_TO_MODEL.values())
+
+
+def test_manifest_rejects_partial_selected_model_set(tmp_path):
+    _write_complete_bundle(tmp_path, mutate=lambda data: data["models"].pop())
+    with pytest.raises(BundleManifestError, match="selected models"):
+        validate_model_bundle(tmp_path)
+
+
+def test_manifest_requires_download_checks_declaration(tmp_path):
+    _write_complete_bundle(tmp_path, mutate=lambda data: data["required_files"].clear())
+    with pytest.raises(BundleManifestError, match="download_checks.json"):
+        validate_model_bundle(tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("config_files", None), ("sha256", "bad"), ("size", 0), ("size", "7")],
+)
+def test_manifest_rejects_invalid_model_field_types(tmp_path, field, value):
+    def mutate(data):
+        data["models"][0][field] = value
+
+    _write_complete_bundle(tmp_path, mutate=mutate)
+    with pytest.raises(BundleManifestError, match=field):
+        validate_model_bundle(tmp_path)
+
+
+def test_manifest_rejects_non_string_config_or_required_file(tmp_path):
+    _write_complete_bundle(
+        tmp_path,
+        mutate=lambda data: data["models"][0].update(config_files=[1]),
+    )
+    with pytest.raises(BundleManifestError, match="config_files"):
+        validate_model_bundle(tmp_path)
+
+    _write_complete_bundle(
+        tmp_path,
+        mutate=lambda data: data.update(required_files=["download_checks.json", 1]),
+    )
+    with pytest.raises(BundleManifestError, match="required_files"):
+        validate_model_bundle(tmp_path)
+
+
+def test_manifest_rejects_duplicate_models(tmp_path):
+    _write_complete_bundle(
+        tmp_path,
+        mutate=lambda data: data["models"].append(dict(data["models"][0])),
+    )
+    with pytest.raises(BundleManifestError, match="duplicate"):
+        validate_model_bundle(tmp_path)
+
+
+def test_manifest_rejects_non_string_filename_as_schema_error(tmp_path):
+    _write_complete_bundle(
+        tmp_path,
+        mutate=lambda data: data["models"][0].update(filename=[]),
+    )
+    with pytest.raises(BundleManifestError, match="filename"):
+        validate_model_bundle(tmp_path)

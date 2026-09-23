@@ -52,8 +52,8 @@ def test_workflow_installs_python_and_dependencies():
 
 
 def test_workflow_pins_dependency_versions():
-    """Dependencies are pinned to the locally validated stack."""
-    text = Path("packaging/requirements-macos.txt").read_text()
+    """Direct dependencies are strict without claiming a transitive lock."""
+    text = Path("requirements/macos-arm64.lock").read_text()
     assert "PySide6==6.11.2" in text
     assert "audio-separator==0.47.0" in text
     assert "pyinstaller==6.22.3" in text.lower()
@@ -103,15 +103,25 @@ def test_workflow_packages_and_uploads_artifact():
     assert "dist/StemSeparator-macos.zip" in text
 
 
-def test_workflow_has_read_only_permissions_and_reproducible_requirements():
+def test_workflow_has_read_only_permissions_and_direct_inventory():
     data = _load()
     assert data["permissions"] == {"contents": "read"}
     install = next(
         step["run"] for step in data["jobs"]["build"]["steps"]
         if step.get("name") == "Install Python dependencies"
     )
-    assert "requirements-macos.txt" in install
+    assert "requirements/macos-arm64.lock" in install
     assert "--upgrade pip" not in install
+    assert "--require-hashes" not in install
+
+
+def test_tag_upload_depends_on_release_gate():
+    steps = _load()["jobs"]["build"]["steps"]
+    gate = next(step for step in steps if step.get("id") == "release_gate")
+    upload = next(step for step in steps if step.get("name") == "Upload the macOS artifact")
+    assert "refs/tags/" in gate["if"]
+    assert "scripts.validate_release" in gate["run"]
+    assert "steps.release_gate.outcome == 'success'" in upload["if"]
 
 
 def test_workflow_validates_binary_architecture_smokes_and_hashes_artifact():

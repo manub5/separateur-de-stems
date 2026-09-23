@@ -13,13 +13,15 @@ ffmpeg_src = shutil.which("ffmpeg")
 ffprobe_src = shutil.which("ffprobe")
 i18n_dir = ROOT / "separateur_de_stems" / "ui" / "i18n"
 model_assets = validate_build_inputs(
-    ROOT / "models", i18n_dir, ffmpeg_src, ffprobe_src
+    ROOT / "models", i18n_dir, ffmpeg_src, ffprobe_src,
+    ROOT / "packaging" / "redistributed-binaries.json",
 )
 
 datas = []
 datas += collect_data_files("audio_separator")
 datas += collect_data_files("separateur_de_stems")
 datas += [(str(asset), "models") for asset in model_assets]
+datas.append((str(ROOT / "packaging" / "redistributed-binaries.json"), "ffmpeg"))
 
 # Compiled Qt translations, resolved at runtime from
 # <sys._MEIPASS>/separateur_de_stems/ui/i18n.

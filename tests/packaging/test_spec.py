@@ -37,6 +37,6 @@ def test_spec_uses_real_bundle_identifier():
     assert "io.github.numa91.stemseparator" in text
 
 
-def test_spec_fails_before_analysis_when_offline_manifest_is_incomplete():
-    with pytest.raises(PackagingError, match="manifest"):
+def test_spec_fails_before_analysis_when_release_metadata_is_incomplete():
+    with pytest.raises(PackagingError, match="licence|manifest"):
         runpy.run_path(str(SPEC), init_globals={"SPECPATH": str(SPEC.parent)})

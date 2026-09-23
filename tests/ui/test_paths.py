@@ -5,12 +5,12 @@ they are emulated by monkeypatching ``sys.frozen`` and ``sys._MEIPASS``.
 Qt is run in offscreen mode.
 """
 
-import os
 import sys
 import json
 
 import pytest
 
+from separateur_de_stems.core.models import STEM_TO_MODEL
 from separateur_de_stems.ui import paths
 
 
@@ -48,17 +48,20 @@ def test_default_model_dir_frozen_without_valid_manifest_stays_explicit(monkeypa
 def test_default_model_dir_frozen_uses_complete_bundle(monkeypatch, tmp_path):
     models = tmp_path / "models"
     models.mkdir()
-    payload = models / "model.bin"
-    payload.write_bytes(b"model")
     import hashlib
-    manifest = {
-        "schema_version": 1,
-        "models": [{
-            "filename": "model.bin", "config_files": [],
-            "sha256": hashlib.sha256(b"model").hexdigest(), "size": 5,
+    entries = []
+    for filename in sorted(set(STEM_TO_MODEL.values())):
+        payload = filename.encode()
+        (models / filename).write_bytes(payload)
+        entries.append({
+            "filename": filename, "config_files": [],
+            "sha256": hashlib.sha256(payload).hexdigest(), "size": len(payload),
             "source": "https://example.invalid/model", "licence": "MIT",
             "licence_status": "distributable"
-        }],
+        })
+    manifest = {
+        "schema_version": 1,
+        "models": entries,
         "required_files": ["download_checks.json"]
     }
     (models / "download_checks.json").write_text("{}")
@@ -80,24 +83,3 @@ def test_default_output_dir_non_empty():
     result = paths.default_output_dir()
     assert isinstance(result, str)
     assert result
-
-
-def test_ffmpeg_dir_none_in_dev():
-    assert paths.ffmpeg_dir() is None
-
-
-def test_ffmpeg_dir_none_when_meipass_missing(monkeypatch, tmp_path):
-    monkeypatch.setattr(sys, "frozen", True, raising=False)
-    monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)
-    assert paths.ffmpeg_dir() is None
-
-
-def test_ffmpeg_dir_returns_existing_dir(monkeypatch, tmp_path):
-    meipass = tmp_path / "_meipass"
-    ffmpeg = meipass / "ffmpeg"
-    ffmpeg.mkdir(parents=True)
-    monkeypatch.setattr(sys, "frozen", True, raising=False)
-    monkeypatch.setattr(sys, "_MEIPASS", str(meipass), raising=False)
-    result = paths.ffmpeg_dir()
-    assert result == str(ffmpeg)
-    assert os.path.isdir(result)

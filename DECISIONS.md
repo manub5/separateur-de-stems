@@ -114,11 +114,10 @@ Python installés sur la machine cible, tout en gardant un bundle raisonnable.
   `numa91`), au lieu du placeholder `com.example.stemseparator`. Stable et
   unique, il sert d'identité au `.app` macOS et évitera les collisions avec
   d'autres applications lors d'une future signature/notarisation.
-- **Versions épinglées dans la CI** : le workflow macOS installe des versions
-  exactes (`PySide6==6.11.2`, `audio-separator==0.47.0`, `soundfile==0.14.0`,
-  `pytest==9.1.1`, `pytest-qt==4.5.0`, `pyinstaller==6.22.3`), identiques à la
-  pile validée localement, afin que la CI reproduise l'environnement de
-  développement et de test.
+- **Inventaire direct strict dans la CI** : le workflow macOS installe les
+  versions directes listées dans `requirements/macos-arm64.lock`. Ce fichier ne
+  verrouille pas les dépendances transitives et ne garantit donc pas à lui seul
+  une résolution identique.
 - **Extension `.qm` committée et embarquée** : les catalogues compilés sont
   versionnés puis inclus dans le bundle (package-data
   `separateur_de_stems.ui` = `i18n/*.qm`, `i18n/*.ts`), et
@@ -150,8 +149,10 @@ source ou un statut de licence distribuable manque. En développement, le chemin
 n'utilise `_MEIPASS/models` par défaut qu'après validation complète du manifeste.
 Le contrôle lit les gros poids par blocs pour ne pas les charger en mémoire.
 
-Le workflow macOS utilise `packaging/requirements-macos.txt`, vérifie les outils
-multimédia arm64, puis inspecte le bundle et encode un signal synthétique avec
-un `PATH` vide. La publication reste de fait impossible tant que le gate strict
-échoue. Les versions transitives ne sont pas encore verrouillées avec des hashes
-et ne doivent pas être présentées comme telles.
+Le workflow macOS utilise l'inventaire direct
+`requirements/macos-arm64.lock`, vérifie les outils multimédia arm64, puis
+inspecte le bundle et encode un signal synthétique avec un `PATH` vide. Pour un
+tag, `scripts.validate_release` exige en plus les licences redistribuables de
+ffmpeg/ffprobe et un futur `requirements/macos-arm64-transitive.lock` avec de
+vrais hashes, généré et validé sur macOS arm64. Aucun hash ni lock transitif
+n'est fabriqué depuis Linux ; l'upload tag reste bloqué jusque-là.
