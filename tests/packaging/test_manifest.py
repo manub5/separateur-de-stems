@@ -35,13 +35,19 @@ def _write_complete_bundle(root, *, mutate=None):
         (root / filename).write_bytes(payload)
         entry = _entry(filename, payload)
         if filename.endswith(".yaml"):
-            weight = f"weights/{filename.removesuffix('.yaml')}.th"
+            weight = f"{filename.removesuffix('.yaml')}.th"
             weight_payload = weight.encode()
-            (root / "weights").mkdir(exist_ok=True)
             (root / weight).write_bytes(weight_payload)
             entry["asset_paths"].append(weight)
         entries.append(entry)
-    checks = b"{}"
+    demucs_downloads = {}
+    for entry in entries:
+        if entry["filename"].endswith(".yaml"):
+            demucs_downloads[f"Demucs v4: {entry['filename'][:-5]}"] = {
+                path.rsplit("/", 1)[-1]: f"https://example.invalid/{path}"
+                for path in entry["asset_paths"]
+            }
+    checks = json.dumps({"demucs_download_list": demucs_downloads}).encode()
     (root / "download_checks.json").write_bytes(checks)
     assets = [_asset("download_checks.json", checks)]
     for entry in entries:
@@ -126,7 +132,36 @@ def test_manifest_rejects_uninventoried_demucs_weight(tmp_path):
         demucs["asset_paths"] = [demucs["filename"]]
 
     _write_complete_bundle(tmp_path, mutate=mutate)
-    with pytest.raises(BundleManifestError, match=r"Demucs.*\.th"):
+    with pytest.raises(BundleManifestError, match="complete Demucs weights"):
+        validate_model_bundle(tmp_path)
+
+
+def test_manifest_rejects_arbitrary_demucs_weight(tmp_path):
+    def mutate(data):
+        demucs = next(entry for entry in data["models"] if entry["filename"].endswith(".yaml"))
+        expected = next(path for path in demucs["asset_paths"] if path.endswith(".th"))
+        demucs["asset_paths"].remove(expected)
+        demucs["asset_paths"].append("weights/arbitrary.th")
+        data["assets"] = [asset for asset in data["assets"] if asset["path"] != expected]
+        payload = b"arbitrary"
+        (tmp_path / "weights").mkdir(exist_ok=True)
+        (tmp_path / "weights" / "arbitrary.th").write_bytes(payload)
+        data["assets"].append(_asset("weights/arbitrary.th", payload))
+
+    _write_complete_bundle(tmp_path, mutate=mutate)
+    with pytest.raises(BundleManifestError, match="complete Demucs weights"):
+        validate_model_bundle(tmp_path)
+
+
+def test_manifest_rejects_missing_exact_demucs_weight(tmp_path):
+    def mutate(data):
+        demucs = next(entry for entry in data["models"] if entry["filename"].endswith(".yaml"))
+        expected = next(path for path in demucs["asset_paths"] if path.endswith(".th"))
+        demucs["asset_paths"].remove(expected)
+        data["assets"] = [asset for asset in data["assets"] if asset["path"] != expected]
+
+    _write_complete_bundle(tmp_path, mutate=mutate)
+    with pytest.raises(BundleManifestError, match="complete Demucs weights"):
         validate_model_bundle(tmp_path)
 
 

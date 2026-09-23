@@ -104,6 +104,21 @@ def parse_otool_dependencies(output: str) -> list[str]:
     return [line.strip().split(" (", 1)[0] for line in lines[1:] if line.strip()]
 
 
+def parse_otool_rpaths(output: str) -> list[str]:
+    """Extract LC_RPATH values from ``otool -l`` output."""
+    lines = output.splitlines()
+    rpaths = []
+    for index, line in enumerate(lines):
+        if line.strip() != "cmd LC_RPATH":
+            continue
+        for candidate in lines[index + 1:index + 4]:
+            match = re.match(r"\s*path\s+(\S+)\s+\(offset\s+\d+\)\s*$", candidate)
+            if match:
+                rpaths.append(match.group(1))
+                break
+    return rpaths
+
+
 def validate_macos_dependencies(dependencies, binary_name, *, policy="system-only"):
     if policy == "static" and dependencies:
         raise PackagingError(f"Redistributed binary {binary_name} declares dependencies under static policy")
@@ -149,9 +164,9 @@ def validate_redistributed_binaries(
         entry = entries[name]
         if _file_sha256(path) != entry["sha256"]:
             raise PackagingError(f"Redistributed binary {name} SHA-256 mismatch")
-        version_output = inspect([path, "--version"])
-        version_lines = version_output.splitlines()
-        if not version_lines or entry["version"] not in version_lines[0]:
+        version_output = inspect([path, "-version"])
+        actual_version = _parse_binary_version(version_output, name)
+        if actual_version is None or _normalized_version(actual_version) != _normalized_version(entry["version"]):
             raise PackagingError(f"Redistributed binary {name} version mismatch")
         architecture = inspect(["file", "-b", path])
         if entry["architecture"] not in architecture:
@@ -159,6 +174,146 @@ def validate_redistributed_binaries(
         dependencies = parse_otool_dependencies(inspect(["otool", "-L", path]))
         validate_macos_dependencies(dependencies, name, policy=entry["dependency_policy"])
     return [Path(binaries[name]) for name in sorted(_BINARY_NAMES)]
+
+
+def validate_macos_bundle(app_path, *, inspect=None, report_path=None, required_binaries=()):
+    """Validate that every Mach-O dependency resolves within the app or macOS."""
+    app = Path(app_path)
+    if not app.is_dir():
+        raise PackagingError(f"macOS application bundle is absent: {app}")
+    if inspect is None:
+        inspect = _run_inspection
+
+    files = sorted(path for path in app.rglob("*") if path.is_file())
+    mach_o_files = []
+    for path in files:
+        if "Mach-O" in inspect(["file", "-b", path]):
+            mach_o_files.append(path)
+    if not mach_o_files:
+        raise PackagingError(f"macOS application bundle contains no Mach-O files: {app}")
+
+    executable_dir = app / "Contents" / "MacOS"
+    executables = [path for path in mach_o_files if path.parent == executable_dir]
+    if not executables:
+        raise PackagingError("macOS application bundle has no inspected main executable")
+    main_executable_dir = executable_dir.resolve()
+    inspected = {path.resolve(): path for path in mach_o_files}
+
+    for required in required_binaries:
+        if not any(path.name == required for path in mach_o_files):
+            raise PackagingError(f"Required bundled Mach-O binary was not inspected: {required}")
+
+    for binary in mach_o_files:
+        dependencies = parse_otool_dependencies(inspect(["otool", "-L", binary]))
+        rpaths = parse_otool_rpaths(inspect(["otool", "-l", binary]))
+        for dependency in dependencies:
+            target = _resolve_macos_dependency(
+                dependency, binary, rpaths, main_executable_dir, app
+            )
+            if target is not None and target not in inspected:
+                raise PackagingError(
+                    f"Bundle dependency was not inspected as Mach-O: {dependency} from {binary}"
+                )
+
+    report = {
+        "schema_version": 1,
+        "bundle": app.name,
+        "mach_o_files": [
+            {
+                "path": path.relative_to(app).as_posix(),
+                "size": path.stat().st_size,
+                "sha256": _file_sha256(path),
+            }
+            for path in mach_o_files
+        ],
+    }
+    if report_path is not None:
+        Path(report_path).write_text(
+            json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+    return mach_o_files
+
+
+def _resolve_macos_dependency(dependency, loader, rpaths, executable_dir, app):
+    if dependency.startswith(("/usr/lib/", "/System/Library/")):
+        return None
+    if dependency.startswith(("/opt/homebrew/", "/usr/local/")):
+        raise PackagingError(f"Mach-O {loader} has external dependency: {dependency}")
+
+    loader_dir = loader.parent.resolve()
+    if dependency.startswith("@loader_path/"):
+        candidate = loader_dir / dependency.removeprefix("@loader_path/")
+    elif dependency.startswith("@executable_path/"):
+        candidate = executable_dir / dependency.removeprefix("@executable_path/")
+    elif dependency.startswith("@rpath/"):
+        suffix = dependency.removeprefix("@rpath/")
+        candidates = []
+        for rpath in rpaths:
+            expanded = _expand_macos_path(rpath, loader_dir, executable_dir)
+            if expanded is not None:
+                candidates.append(expanded / suffix)
+        existing = [path for path in candidates if path.is_file()]
+        if not existing:
+            raise PackagingError(f"unresolved @rpath dependency {dependency} from {loader}")
+        candidate = existing[0]
+    elif dependency.startswith("/"):
+        candidate = Path(dependency)
+    else:
+        raise PackagingError(f"Mach-O {loader} has external dependency: {dependency}")
+
+    if not candidate.is_file():
+        raise PackagingError(f"missing dependency target {dependency} from {loader}")
+    target = candidate.resolve()
+    try:
+        target.relative_to(app.resolve())
+    except ValueError:
+        raise PackagingError(f"Mach-O {loader} has external dependency: {dependency}")
+    return target
+
+
+def _expand_macos_path(path, loader_dir, executable_dir):
+    if path == "@loader_path":
+        return loader_dir
+    if path.startswith("@loader_path/"):
+        return loader_dir / path.removeprefix("@loader_path/")
+    if path == "@executable_path":
+        return executable_dir
+    if path.startswith("@executable_path/"):
+        return executable_dir / path.removeprefix("@executable_path/")
+    if path.startswith("/"):
+        return Path(path)
+    return None
+
+
+def _run_inspection(command):
+    try:
+        completed = subprocess.run(
+            [str(part) for part in command], check=True, capture_output=True,
+            text=True, env={"PATH": "/usr/bin:/bin"},
+        )
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise PackagingError(f"Mach-O inspection failed for {command[-1]}: {error}") from error
+    return completed.stdout
+
+
+def _parse_binary_version(output, binary_name):
+    lines = output.splitlines()
+    if not lines:
+        return None
+    match = re.match(rf"^{re.escape(binary_name)}\s+version\s+(\S+)(?:\s|$)", lines[0], re.IGNORECASE)
+    return match.group(1) if match else None
+
+
+def _normalized_version(version):
+    value = version.strip().lower()
+    if value.startswith("n") and len(value) > 1 and value[1].isdigit():
+        value = value[1:]
+    if re.fullmatch(r"\d+(?:\.\d+)*", value):
+        parts = [int(part) for part in value.split(".")]
+        while len(parts) > 1 and parts[-1] == 0:
+            parts.pop()
+        return tuple(parts)
+    return value
 
 
 def _file_sha256(path):

@@ -52,6 +52,7 @@ def test_default_model_dir_frozen_uses_complete_bundle(monkeypatch, tmp_path):
     models.mkdir()
     import hashlib
     entries = []
+    demucs_downloads = {}
     for filename in sorted(set(STEM_TO_MODEL.values())):
         payload = filename.encode()
         (models / filename).write_bytes(payload)
@@ -60,12 +61,16 @@ def test_default_model_dir_frozen_uses_complete_bundle(monkeypatch, tmp_path):
             weight = f"{filename}.th"
             (models / weight).write_bytes(weight.encode())
             asset_paths.append(weight)
+            demucs_downloads[f"Demucs v4: {filename[:-5]}"] = {
+                filename: f"https://example.invalid/{filename}",
+                weight: f"https://example.invalid/{weight}",
+            }
         entries.append({
             "filename": filename, "asset_paths": asset_paths,
             "source": "https://example.invalid/model", "licence": "MIT",
             "licence_status": "distributable"
         })
-    checks = b"{}"
+    checks = json.dumps({"demucs_download_list": demucs_downloads}).encode()
     assets = []
     for entry in entries:
         for asset_path in entry["asset_paths"]:

@@ -16,6 +16,7 @@ import pytest
 from PySide6.QtCore import QObject, Signal
 
 from separateur_de_stems.core.errors import CancelledError
+from separateur_de_stems.core.bundle_manifest import FrozenBundleError
 from separateur_de_stems.ui.main_window import MainWindow
 from separateur_de_stems.ui.run_context import RunContext
 from separateur_de_stems.ui.settings import Settings
@@ -275,6 +276,27 @@ def test_missing_input_and_empty_output_do_not_start(
     assert fake_factory.created == []
     assert window.status_label.text() == window.tr("Failed")
     assert "not readable" in window.log_view.toPlainText()
+
+
+def test_frozen_model_resolution_failure_is_shown_without_starting_worker(
+    qtbot, settings, tmp_path, fake_factory, monkeypatch
+):
+    audio = tmp_path / "song.wav"
+    audio.write_bytes(b"audio")
+    settings.model_dir = ""
+    window = _make_window(qtbot, settings, worker_factory=fake_factory)
+    window.open_file(str(audio))
+    window.output_edit.setText(str(tmp_path / "out"))
+
+    def fail_resolution():
+        raise FrozenBundleError("bundled models are incomplete")
+
+    monkeypatch.setattr("separateur_de_stems.ui.main_window.default_model_dir", fail_resolution)
+    window.start_separation()
+
+    assert fake_factory.created == []
+    assert window.status_label.text() == window.tr("Failed")
+    assert "bundled models are incomplete" in window.log_view.toPlainText()
 
 
 def test_incomplete_outputs_fail_and_cleanup_only_workspace(

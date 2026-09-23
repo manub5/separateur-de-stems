@@ -78,7 +78,13 @@ jobs:
           otool -L dist/StemSeparator.app/Contents/Frameworks/ffmpeg/ffprobe
           python -m scripts.validate_release --binaries-only --platform darwin \
             --ffmpeg dist/StemSeparator.app/Contents/Frameworks/ffmpeg/ffmpeg \
-            --ffprobe dist/StemSeparator.app/Contents/Frameworks/ffmpeg/ffprobe
+             --ffprobe dist/StemSeparator.app/Contents/Frameworks/ffmpeg/ffprobe
+
+      - name: Validate complete Mach-O bundle closure
+        run: >-
+          python -m scripts.validate_release --app dist/StemSeparator.app
+          --closure-report dist/macos-runtime-closure.json
+          --required-binary ffmpeg --required-binary ffprobe
 
       - name: Package the .app as a zip
         working-directory: dist

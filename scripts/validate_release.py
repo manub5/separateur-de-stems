@@ -5,6 +5,7 @@ from pathlib import Path
 
 from separateur_de_stems.core.packaging import (
     validate_macos_release_lock,
+    validate_macos_bundle,
     validate_redistributed_binaries,
     validate_redistributed_binary_licences,
 )
@@ -26,8 +27,17 @@ def main() -> int:
     parser.add_argument("--ffprobe", type=Path)
     parser.add_argument("--platform", choices=("darwin", "linux"))
     parser.add_argument("--binaries-only", action="store_true")
+    parser.add_argument("--app", type=Path)
+    parser.add_argument("--closure-report", type=Path)
+    parser.add_argument("--required-binary", action="append", default=[])
     args = parser.parse_args()
-    if args.binaries_only:
+    if args.app is not None:
+        validate_macos_bundle(
+            args.app,
+            report_path=args.closure_report,
+            required_binaries=args.required_binary,
+        )
+    elif args.binaries_only:
         if args.ffmpeg is None or args.ffprobe is None or args.platform is None:
             parser.error("--binaries-only requires --ffmpeg, --ffprobe and --platform")
         validate_redistributed_binaries(

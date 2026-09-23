@@ -161,6 +161,19 @@ def test_workflow_validates_source_and_bundled_dependencies_before_archive():
     assert all("otool" in step["run"] or "--platform darwin" in step["run"] for _, step in validation_steps)
 
 
+def test_workflow_validates_complete_app_macho_closure_before_archive():
+    steps = _load()["jobs"]["build"]["steps"]
+    archive_index = next(i for i, step in enumerate(steps) if step.get("name") == "Package the .app as a zip")
+    closure_index = next(
+        i for i, step in enumerate(steps)
+        if "--app dist/StemSeparator.app" in step.get("run", "")
+    )
+    closure_command = steps[closure_index]["run"]
+    assert closure_index < archive_index
+    assert "--closure-report" in closure_command
+    assert "ffprobe" in closure_command
+
+
 def test_workflow_verifies_archive_checksum_before_upload():
     steps = _load()["jobs"]["build"]["steps"]
     upload_index = next(i for i, step in enumerate(steps) if step.get("name") == "Upload the macOS artifact")

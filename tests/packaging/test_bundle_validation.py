@@ -67,9 +67,90 @@ def test_binary_validation_binds_manifest_to_real_files(tmp_path):
             return "Mach-O 64-bit executable arm64"
         if command[0] == "otool":
             return f"{command[-1]}:\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0)\n"
-        return "ffmpeg version 7.1 Copyright"
+        return f"{Path(command[0]).name} version 7.1 Copyright"
 
     packaging_mod.validate_redistributed_binaries(manifest, paths, inspect=inspect, platform_name="darwin")
+
+
+def test_binary_validation_rejects_version_substring_match(tmp_path):
+    payloads = {name: name.encode() for name in ("ffmpeg", "ffprobe")}
+    paths = {name: _executable(tmp_path / name, payload.decode()) for name, payload in payloads.items()}
+    manifest = _binary_manifest(tmp_path / "binaries.json", payloads)
+
+    def inspect(command):
+        if command[0] == "file":
+            return "Mach-O 64-bit executable arm64"
+        if command[0] == "otool":
+            return f"{command[-1]}:\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0)\n"
+        return f"{Path(command[0]).name} version 17.1 Copyright"
+
+    with pytest.raises(PackagingError, match="version mismatch"):
+        packaging_mod.validate_redistributed_binaries(
+            manifest, paths, inspect=inspect, platform_name="darwin"
+        )
+
+
+def _fake_macos_app(tmp_path, *, dependency="@rpath/libcodec.dylib", rpath="@loader_path/../Frameworks"):
+    app = tmp_path / "StemSeparator.app"
+    executable = app / "Contents" / "MacOS" / "StemSeparator"
+    library = app / "Contents" / "Frameworks" / "libcodec.dylib"
+    executable.parent.mkdir(parents=True)
+    library.parent.mkdir(parents=True)
+    executable.write_bytes(b"app")
+    library.write_bytes(b"library")
+    executable.chmod(0o755)
+    outputs = {
+        ("file", "-b", str(executable)): "Mach-O 64-bit executable arm64",
+        ("file", "-b", str(library)): "Mach-O 64-bit dynamically linked shared library arm64",
+        ("otool", "-L", str(executable)): f"{executable}:\n\t{dependency} (compatibility version 1.0.0)\n",
+        ("otool", "-L", str(library)): f"{library}:\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0)\n",
+        ("otool", "-l", str(executable)): (
+            "Load command 0\n      cmd LC_RPATH\n  cmdsize 48\n"
+            f"     path {rpath} (offset 12)\n"
+        ),
+        ("otool", "-l", str(library)): "",
+    }
+
+    def inspect(command):
+        return outputs[tuple(map(str, command))]
+
+    return app, executable, library, inspect, outputs
+
+
+def test_macos_bundle_validator_accepts_complete_closure_and_reports_hashes(tmp_path):
+    app, executable, library, inspect, _ = _fake_macos_app(tmp_path)
+    report = tmp_path / "ignored-runtime-closure.json"
+
+    result = packaging_mod.validate_macos_bundle(app, inspect=inspect, report_path=report)
+
+    assert set(result) == {executable, library}
+    data = json.loads(report.read_text())
+    library_entry = next(item for item in data["mach_o_files"] if item["path"].endswith("libcodec.dylib"))
+    assert library_entry["size"] == len(b"library")
+    assert library_entry["sha256"] == hashlib.sha256(b"library").hexdigest()
+
+
+def test_macos_bundle_validator_rejects_missing_rpath(tmp_path):
+    app, _, _, inspect, _ = _fake_macos_app(tmp_path, rpath="@loader_path/missing")
+    with pytest.raises(PackagingError, match="unresolved.*@rpath"):
+        packaging_mod.validate_macos_bundle(app, inspect=inspect)
+
+
+def test_macos_bundle_validator_rejects_missing_loader_target(tmp_path):
+    app, _, _, inspect, _ = _fake_macos_app(
+        tmp_path, dependency="@loader_path/../Frameworks/missing.dylib"
+    )
+    with pytest.raises(PackagingError, match="missing dependency target"):
+        packaging_mod.validate_macos_bundle(app, inspect=inspect)
+
+
+def test_macos_bundle_validator_rejects_transitive_external_dependency(tmp_path):
+    app, _, library, inspect, outputs = _fake_macos_app(tmp_path)
+    outputs[("otool", "-L", str(library))] = (
+        f"{library}:\n\t/opt/homebrew/lib/libexternal.dylib (compatibility version 1.0.0)\n"
+    )
+    with pytest.raises(PackagingError, match="external dependency"):
+        packaging_mod.validate_macos_bundle(app, inspect=inspect)
 
 
 def test_binary_validation_fails_closed_when_dependency_inspection_is_unknown(tmp_path):

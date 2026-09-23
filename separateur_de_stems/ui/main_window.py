@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
 )
 
 from separateur_de_stems.core.models import is_supported_audio
+from separateur_de_stems.core.bundle_manifest import FrozenBundleError
 from separateur_de_stems.ui import i18n
 from separateur_de_stems.ui.drop_zone import DropZone
 from separateur_de_stems.ui.paths import default_model_dir, default_output_dir
@@ -189,7 +190,11 @@ class MainWindow(QMainWindow):
         if not input_path or not stems or not output_dir:
             return
 
-        model_dir = self._settings.model_dir.strip() or default_model_dir()
+        try:
+            model_dir = self._settings.model_dir.strip() or default_model_dir()
+        except FrozenBundleError as error:
+            self.on_failed(str(error))
+            return
         error = self._validate_run_paths(input_path, output_dir, model_dir)
         if error:
             self.on_failed(error)

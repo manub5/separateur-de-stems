@@ -54,6 +54,8 @@ def validate_model_bundle(model_dir, *, require_distributable=False):
     if "download_checks.json" not in assets_by_path:
         raise BundleManifestError("Asset metadata for download_checks.json is required")
 
+    demucs_weights = _read_demucs_weights(root / "download_checks.json")
+
     if not all(isinstance(entry, dict) for entry in manifest["models"]):
         raise BundleManifestError("models must contain objects")
     filenames = [entry.get("filename") for entry in manifest["models"]]
@@ -76,8 +78,13 @@ def validate_model_bundle(model_dir, *, require_distributable=False):
             _validate_relative_path(path)
         if filename not in asset_paths:
             raise BundleManifestError(f"Model {filename} must reference its selected model file")
-        if filename.endswith(".yaml") and not any(path.endswith(".th") for path in asset_paths):
-            raise BundleManifestError(f"Demucs model {filename} must inventory at least one .th weight")
+        if filename.endswith(".yaml"):
+            expected_weights = demucs_weights.get(filename)
+            declared_weights = {path for path in asset_paths if path.endswith(".th")}
+            if expected_weights is None or declared_weights != expected_weights:
+                raise BundleManifestError(
+                    f"cannot determine complete Demucs weights for {filename}"
+                )
         for field in ("source", "licence", "licence_status"):
             if not isinstance(entry.get(field), str) or not entry[field]:
                 raise BundleManifestError(f"Model {filename} has unknown field: {field}")
@@ -104,6 +111,35 @@ def validate_model_bundle(model_dir, *, require_distributable=False):
         assets.append(required_path)
     assets.append(manifest_path)
     return assets
+
+
+def _read_demucs_weights(download_checks_path: Path) -> dict[str, set[str]]:
+    try:
+        checks = json.loads(download_checks_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise BundleManifestError(
+            f"cannot determine complete Demucs weights: invalid download_checks.json: {error}"
+        ) from error
+    downloads = checks.get("demucs_download_list") if isinstance(checks, dict) else None
+    if not isinstance(downloads, dict):
+        raise BundleManifestError(
+            "cannot determine complete Demucs weights: demucs_download_list is absent"
+        )
+    result = {}
+    for entry in downloads.values():
+        if not isinstance(entry, dict) or not all(isinstance(path, str) for path in entry):
+            raise BundleManifestError(
+                "cannot determine complete Demucs weights: invalid demucs_download_list"
+            )
+        configs = [path for path in entry if path.endswith(".yaml")]
+        weights = {path for path in entry if path.endswith(".th")}
+        if len(configs) == 1 and weights:
+            if configs[0] in result:
+                raise BundleManifestError(
+                    f"cannot determine complete Demucs weights for {configs[0]}"
+                )
+            result[configs[0]] = weights
+    return result
 
 
 def _asset_path(root: Path, filename: str) -> Path:
