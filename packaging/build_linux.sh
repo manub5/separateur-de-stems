@@ -10,6 +10,8 @@ cd "$ROOT_DIR"
 # No local .venv in the packaging worktree: default to the root venv.
 # Override with PYTHON=/path/to/python.
 PYTHON="${PYTHON:-../../.venv/bin/python}"
+PYINSTALLER_CONFIG_DIR="$ROOT_DIR/.cache/pyinstaller"
+export PYINSTALLER_CONFIG_DIR
 
 "$PYTHON" -m PyInstaller --noconfirm --clean packaging/stem-separator.spec
 

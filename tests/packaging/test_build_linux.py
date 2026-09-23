@@ -19,6 +19,13 @@ def test_build_script_runs_bundle_smoke_as_module():
     assert "-m scripts.smoke_bundle" in SCRIPT.read_text()
 
 
+def test_build_script_keeps_pyinstaller_cache_inside_project():
+    script = SCRIPT.read_text()
+
+    assert 'PYINSTALLER_CONFIG_DIR="$ROOT_DIR/.cache/pyinstaller"' in script
+    assert "export PYINSTALLER_CONFIG_DIR" in script
+
+
 @pytest.mark.slow
 def test_bundled_binary_help_runs():
     if not BINARY.is_file():
