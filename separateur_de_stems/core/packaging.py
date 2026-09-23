@@ -166,7 +166,7 @@ def validate_redistributed_binaries(
             raise PackagingError(f"Redistributed binary {name} SHA-256 mismatch")
         version_output = inspect([path, "-version"])
         actual_version = _parse_binary_version(version_output, name)
-        if actual_version is None or _normalized_version(actual_version) != _normalized_version(entry["version"]):
+        if actual_version is None or actual_version != entry["version"]:
             raise PackagingError(f"Redistributed binary {name} version mismatch")
         architecture = inspect(["file", "-b", path])
         if entry["architecture"] not in architecture:
@@ -203,17 +203,42 @@ def validate_macos_bundle(app_path, *, inspect=None, report_path=None, required_
         if not any(path.name == required for path in mach_o_files):
             raise PackagingError(f"Required bundled Mach-O binary was not inspected: {required}")
 
-    for binary in mach_o_files:
-        dependencies = parse_otool_dependencies(inspect(["otool", "-L", binary]))
-        rpaths = parse_otool_rpaths(inspect(["otool", "-l", binary]))
-        for dependency in dependencies:
-            target = _resolve_macos_dependency(
-                dependency, binary, rpaths, main_executable_dir, app
+    dependency_graph = {
+        path.resolve(): parse_otool_dependencies(inspect(["otool", "-L", path]))
+        for path in mach_o_files
+    }
+    rpath_graph = {
+        path.resolve(): parse_otool_rpaths(inspect(["otool", "-l", path]))
+        for path in mach_o_files
+    }
+    for executable in executables:
+        pending = [(executable.resolve(), ())]
+        visited = set()
+        while pending:
+            binary, inherited_rpaths = pending.pop()
+            loader_dir = binary.parent
+            own_rpaths = tuple(
+                expanded
+                for rpath in rpath_graph[binary]
+                if (expanded := _expand_macos_path(rpath, loader_dir, main_executable_dir))
+                is not None
             )
-            if target is not None and target not in inspected:
-                raise PackagingError(
-                    f"Bundle dependency was not inspected as Mach-O: {dependency} from {binary}"
+            runpaths = tuple(dict.fromkeys((*own_rpaths, *inherited_rpaths)))
+            state = (binary, runpaths)
+            if state in visited:
+                continue
+            visited.add(state)
+            for dependency in dependency_graph[binary]:
+                target = _resolve_macos_dependency(
+                    dependency, binary, runpaths, main_executable_dir, app
                 )
+                if target is None:
+                    continue
+                if target not in inspected:
+                    raise PackagingError(
+                        f"Bundle dependency was not inspected as Mach-O: {dependency} from {binary}"
+                    )
+                pending.append((target, runpaths))
 
     report = {
         "schema_version": 1,
@@ -247,11 +272,7 @@ def _resolve_macos_dependency(dependency, loader, rpaths, executable_dir, app):
         candidate = executable_dir / dependency.removeprefix("@executable_path/")
     elif dependency.startswith("@rpath/"):
         suffix = dependency.removeprefix("@rpath/")
-        candidates = []
-        for rpath in rpaths:
-            expanded = _expand_macos_path(rpath, loader_dir, executable_dir)
-            if expanded is not None:
-                candidates.append(expanded / suffix)
+        candidates = [rpath / suffix for rpath in rpaths]
         existing = [path for path in candidates if path.is_file()]
         if not existing:
             raise PackagingError(f"unresolved @rpath dependency {dependency} from {loader}")
@@ -302,18 +323,6 @@ def _parse_binary_version(output, binary_name):
         return None
     match = re.match(rf"^{re.escape(binary_name)}\s+version\s+(\S+)(?:\s|$)", lines[0], re.IGNORECASE)
     return match.group(1) if match else None
-
-
-def _normalized_version(version):
-    value = version.strip().lower()
-    if value.startswith("n") and len(value) > 1 and value[1].isdigit():
-        value = value[1:]
-    if re.fullmatch(r"\d+(?:\.\d+)*", value):
-        parts = [int(part) for part in value.split(".")]
-        while len(parts) > 1 and parts[-1] == 0:
-            parts.pop()
-        return tuple(parts)
-    return value
 
 
 def _file_sha256(path):

@@ -90,6 +90,24 @@ def test_binary_validation_rejects_version_substring_match(tmp_path):
         )
 
 
+def test_binary_validation_preserves_version_trailing_zeros(tmp_path):
+    payloads = {name: name.encode() for name in ("ffmpeg", "ffprobe")}
+    paths = {name: _executable(tmp_path / name, payload.decode()) for name, payload in payloads.items()}
+    manifest = _binary_manifest(tmp_path / "binaries.json", payloads)
+
+    def inspect(command):
+        if command[0] == "file":
+            return "Mach-O 64-bit executable arm64"
+        if command[0] == "otool":
+            return f"{command[-1]}:\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0)\n"
+        return f"{Path(command[0]).name} version 7.1.0 Copyright"
+
+    with pytest.raises(PackagingError, match="version mismatch"):
+        packaging_mod.validate_redistributed_binaries(
+            manifest, paths, inspect=inspect, platform_name="darwin"
+        )
+
+
 def _fake_macos_app(tmp_path, *, dependency="@rpath/libcodec.dylib", rpath="@loader_path/../Frameworks"):
     app = tmp_path / "StemSeparator.app"
     executable = app / "Contents" / "MacOS" / "StemSeparator"
@@ -151,6 +169,85 @@ def test_macos_bundle_validator_rejects_transitive_external_dependency(tmp_path)
     )
     with pytest.raises(PackagingError, match="external dependency"):
         packaging_mod.validate_macos_bundle(app, inspect=inspect)
+
+
+def _fake_macos_graph(tmp_path, *, include_lib_b=True, second_root=False):
+    app = tmp_path / "StemSeparator.app"
+    executable_dir = app / "Contents" / "MacOS"
+    frameworks = app / "Contents" / "Frameworks"
+    executable_dir.mkdir(parents=True)
+    frameworks.mkdir(parents=True)
+    root = executable_dir / "StemSeparator"
+    lib_a = frameworks / "libA.dylib"
+    lib_b = frameworks / "libB.dylib"
+    root.write_bytes(b"root")
+    lib_a.write_bytes(b"a")
+    if include_lib_b:
+        lib_b.write_bytes(b"b")
+    if second_root:
+        second_root = executable_dir / "ffmpeg"
+        second_root.write_bytes(b"ffmpeg")
+
+    return app
+
+
+def test_macos_bundle_validator_inherits_executable_rpath_for_transitive_library(tmp_path):
+    app = _fake_macos_graph(tmp_path)
+    packaging_mod.validate_macos_bundle(
+        app, inspect=lambda command: _graph_inspect(app, command, cycle=False)
+    )
+
+
+def _graph_inspect(app, command, *, cycle=True):
+    path = Path(command[-1])
+    if command[0] == "file":
+        return "Mach-O 64-bit arm64"
+    if command[:2] == ["otool", "-l"]:
+        if path.name == "StemSeparator":
+            return (
+                "Load command 0\n      cmd LC_RPATH\n  cmdsize 48\n"
+                "     path @loader_path/../Frameworks (offset 12)\n"
+            )
+        if path.name == "ffmpeg":
+            return (
+                "Load command 0\n      cmd LC_RPATH\n  cmdsize 48\n"
+                "     path @loader_path/../Frameworks (offset 12)\n"
+            )
+        return ""
+    dependencies = {
+        "StemSeparator": "@loader_path/../Frameworks/libA.dylib",
+        "libA.dylib": "@rpath/libB.dylib",
+        "libB.dylib": (
+            "@loader_path/libA.dylib" if cycle else "/usr/lib/libSystem.B.dylib"
+        ),
+        "ffmpeg": "/usr/lib/libSystem.B.dylib",
+    }
+    dependency = dependencies[path.name]
+    return f"{path}:\n\t{dependency} (compatibility version 1.0.0)\n"
+
+
+def test_macos_bundle_validator_does_not_borrow_rpath_from_unrelated_root(tmp_path):
+    app = _fake_macos_graph(tmp_path, second_root=True)
+    root = app / "Contents" / "MacOS" / "StemSeparator"
+
+    def inspect(command):
+        if command[:2] == ["otool", "-l"] and Path(command[-1]) == root:
+            return ""
+        return _graph_inspect(app, command)
+
+    with pytest.raises(PackagingError, match="unresolved.*@rpath"):
+        packaging_mod.validate_macos_bundle(app, inspect=inspect)
+
+
+def test_macos_bundle_validator_rejects_absent_transitive_rpath_target(tmp_path):
+    app = _fake_macos_graph(tmp_path, include_lib_b=False)
+    with pytest.raises(PackagingError, match="unresolved.*@rpath"):
+        packaging_mod.validate_macos_bundle(app, inspect=lambda command: _graph_inspect(app, command))
+
+
+def test_macos_bundle_validator_handles_dependency_cycle(tmp_path):
+    app = _fake_macos_graph(tmp_path)
+    packaging_mod.validate_macos_bundle(app, inspect=lambda command: _graph_inspect(app, command))
 
 
 def test_binary_validation_fails_closed_when_dependency_inspection_is_unknown(tmp_path):
