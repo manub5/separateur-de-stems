@@ -10,6 +10,9 @@ from pathlib import Path
 
 README = Path("README.md")
 THIRD_PARTY_NOTICES = Path("THIRD_PARTY_NOTICES.md")
+IMPLEMENTATION_PLAN = Path(
+    "docs/superpowers/plans/2026-09-23-hardening-and-offline-release.md"
+)
 
 
 def _text() -> str:
@@ -38,21 +41,27 @@ def test_readme_has_french_and_english_sections():
 
 
 def test_readme_documents_unsigned_macos_first_launch():
-    text = _text()
-    assert "Ouvrir quand même" in text
-    assert "Open Anyway" in text
+    french, english = map(_normalized, _language_sections())
+    assert "Réglages Système" in french
+    assert "Ouvrir quand même" in french
+    assert "System Settings" in english
+    assert "Open Anyway" in english
 
 
 def test_readme_documents_cli_and_ui_commands():
-    text = _text()
-    assert "separateur-de-stems " in text
-    assert "separateur-de-stems-ui" in text
+    french, english = _language_sections()
+    assert "separateur-de-stems morceau.flac" in french
+    assert "separateur-de-stems-ui --file morceau.flac" in french
+    assert "separateur-de-stems track.flac" in english
+    assert "separateur-de-stems-ui --file track.flac" in english
 
 
 def test_readme_documents_build_commands():
-    text = _text()
-    assert "packaging/build_linux.sh" in text
-    assert "build-macos.yml" in text
+    french, english = _language_sections()
+    assert "packaging/build_linux.sh" in french
+    assert "build-macos.yml" in french
+    assert "packaging/build_linux.sh" in english
+    assert "build-macos.yml" in english
 
 
 def test_each_language_documents_supported_python_range():
@@ -131,3 +140,13 @@ def test_release_documents_record_demucs_and_task_status_honestly():
     assert "Task 4" in progress.partition("## Fait")[2].partition("## À faire")[0]
     assert "Task 5" in progress.partition("## À faire")[2].partition("## Bloqué")[0]
     assert "## D-011 — Packaging PyInstaller et gates de publication" in decisions
+
+
+def test_implementation_plan_matches_completed_task_status():
+    plan = IMPLEMENTATION_PLAN.read_text(encoding="utf-8")
+    completed = plan.partition("### Task 1:")[2].partition("### Task 5:")[0]
+    remaining = plan.partition("### Task 5:")[2]
+    assert "- [ ]" not in completed
+    assert completed.count("- [x]") == 22
+    assert "- [x]" not in remaining
+    assert remaining.count("- [ ]") == 7

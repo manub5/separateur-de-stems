@@ -33,12 +33,12 @@
 - Produces: immutable `RunContext(input_path: str, output_dir: str, model_dir: str, stems: frozenset[str], workspace: str)`.
 - Produces: non-blocking `SeparationWorker.request_cancel()` and one terminal outcome followed by native `finished`.
 
-- [ ] Add failing tests for changing input/output during a run, active close, immediate relaunch, configured model directory, empty output, absent input, incomplete outputs, and non-blocking cancellation.
-- [ ] Confirm each new test fails for the reviewed reason.
-- [ ] Implement immutable run state, disable all mutable controls/actions, defer close until native thread completion, and validate inputs/output/model directory.
-- [ ] Remove snapshot-based cleanup and delete only the run workspace.
-- [ ] Keep the UI locked until native `QThread.finished`, then release/delete the worker and complete deferred close.
-- [ ] Run `QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest tests/ui -q` and commit `fix(ui): make run lifecycle safe and non-blocking`.
+- [x] Add failing tests for changing input/output during a run, active close, immediate relaunch, configured model directory, empty output, absent input, incomplete outputs, and non-blocking cancellation.
+- [x] Confirm each new test fails for the reviewed reason.
+- [x] Implement immutable run state, disable all mutable controls/actions, defer close until native thread completion, and validate inputs/output/model directory.
+- [x] Remove snapshot-based cleanup and delete only the run workspace.
+- [x] Keep the UI locked until native `QThread.finished`, then release/delete the worker and complete deferred close.
+- [x] Run `QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest tests/ui -q` and commit `fix(ui): make run lifecycle safe and non-blocking`.
 
 ### Task 2: Background Export And Robust Engine
 
@@ -59,12 +59,12 @@
 - Produces: `run_pipeline(input_path, stems, output_dir, model_dir, *, include_mp3=True, progress_cb=None) -> dict[str, list[str]]`.
 - Produces: block-based `to_wav24`; confined temporary cleanup; categorized catalogue/model errors.
 
-- [ ] Add failing tests for bounded reads, incomplete outputs, extra model outputs, partial failures, external-path preservation, spawn failure reset, catalogue/load failures, and export progress.
-- [ ] Confirm failures, then implement a private workspace pipeline that exports before returning and cleans in `finally`.
-- [ ] Make `Process.start()` transactional and cancellation repeatable without GUI waits.
-- [ ] Centralize confined cleanup; remove duplicated unsafe CLI/UI cleanup.
-- [ ] Use structured progress stages and map errors to project exceptions.
-- [ ] Run core and CLI tests and commit `fix(core): isolate runs and harden separation exports`.
+- [x] Add failing tests for bounded reads, incomplete outputs, extra model outputs, partial failures, external-path preservation, spawn failure reset, catalogue/load failures, and export progress.
+- [x] Confirm failures, then implement a private workspace pipeline that exports before returning and cleans in `finally`.
+- [x] Make `Process.start()` transactional and cancellation repeatable without GUI waits.
+- [x] Centralize confined cleanup; remove duplicated unsafe CLI/UI cleanup.
+- [x] Use structured progress stages and map errors to project exceptions.
+- [x] Run core and CLI tests and commit `fix(core): isolate runs and harden separation exports`.
 
 ### Task 3: Strict Offline Packaging
 
@@ -85,12 +85,12 @@
 - Produces: one executable-checked bundled ffmpeg resolver and bundled `models/` runtime path.
 - Requires: every filename in `STEM_TO_MODEL`, associated configuration, and `download_checks.json` at build time.
 
-- [ ] Add failing tests requiring model data, ffmpeg/ffprobe build failures, executable checks, Python upper bound, explicit PyYAML, workflow permissions/checksum/size/offline smoke, and locked installs.
-- [ ] Make the spec fail fast and include offline data; centralize runtime path resolution.
-- [ ] Bound Python compatibility and declare every direct development dependency.
-- [ ] Add a hash-ready macOS lock input and remove unconstrained pip upgrades/Homebrew ambiguity where feasible.
-- [ ] Add bundle inspection and synthetic ffmpeg smoke steps; gate tag publication on a licence manifest.
-- [ ] Run packaging tests and commit `fix(packaging): enforce reproducible offline bundles`.
+- [x] Add failing tests requiring model data, ffmpeg/ffprobe build failures, executable checks, Python upper bound, explicit PyYAML, workflow permissions/checksum/size/offline smoke, and locked installs.
+- [x] Make the spec fail fast and include offline data; centralize runtime path resolution.
+- [x] Bound Python compatibility and declare every direct development dependency.
+- [x] Add a hash-ready macOS lock input and remove unconstrained pip upgrades/Homebrew ambiguity where feasible.
+- [x] Add bundle inspection and synthetic ffmpeg smoke steps; gate tag publication on a licence manifest.
+- [x] Run packaging tests and commit `fix(packaging): enforce reproducible offline bundles`.
 
 ### Task 4: Documentation, Licences, And Release State
 
@@ -107,10 +107,10 @@
 **Interfaces:**
 - Produces: accurate bilingual operational and release documentation.
 
-- [ ] Add failing documentation tests for offline models, responsive export/cancel wording, licence gate, Python range, and macOS validation limitations.
-- [ ] Record exact local model sizes/checksums and only licenses supported by verified bundled metadata; mark unknown licenses as release blockers rather than guessing.
-- [ ] Align progress/questions/decisions with actual completion and remaining external validation.
-- [ ] Run documentation tests and commit `docs: align release documentation with hardened behavior`.
+- [x] Add failing documentation tests for offline models, responsive export/cancel wording, licence gate, Python range, and macOS validation limitations.
+- [x] Record exact local model sizes/checksums and only licenses supported by verified bundled metadata; mark unknown licenses as release blockers rather than guessing.
+- [x] Align progress/questions/decisions with actual completion and remaining external validation.
+- [x] Run documentation tests and commit `docs: align release documentation with hardened behavior`.
 
 ### Task 5: Full Quality Gate
 
