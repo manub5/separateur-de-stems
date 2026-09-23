@@ -18,6 +18,9 @@ _REQUIREMENT = re.compile(
     r"(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)==(?P<version>[^\s;@=]+)"
     r"(?P<hashes>(?:\s+--hash=sha256:[0-9a-f]{64})+)"
 )
+_DIRECT_REQUIREMENT = re.compile(
+    r"(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)==(?P<version>[^\s;@=]+)"
+)
 _MALFORMED_HASH_REQUIREMENT = re.compile(
     r"(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)==[^\s;@=]+"
     r"\s+--hash=sha256:\S+"
@@ -127,10 +130,7 @@ def _parse_requirements(lines, *, require_hashes):
         if require_hashes:
             match = _REQUIREMENT.fullmatch(line)
         else:
-            match = re.fullmatch(
-                r"(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)==(?P<version>[^\s;@]+)",
-                line,
-            )
+            match = _DIRECT_REQUIREMENT.fullmatch(line)
         if match is None:
             name = line.split("==", 1)[0] if "==" in line else f"line {line_number}"
             malformed_hash = _MALFORMED_HASH_REQUIREMENT.fullmatch(line)

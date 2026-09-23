@@ -209,6 +209,28 @@ def test_macos_direct_inventory_invalid_utf8_is_contextual(tmp_path):
 @pytest.mark.parametrize(
     "requirement",
     [
+        "app-one===1.0",
+        "app-one==1.0==extra",
+        "app-one>=1.0",
+        "app-one ==1.0",
+        "app-one== 1.0",
+    ],
+)
+def test_macos_direct_inventory_rejects_ambiguous_exact_versions(
+    tmp_path, requirement
+):
+    inventory = tmp_path / "direct.lock"
+    inventory.write_text(f"{requirement}\napp-two==2.0\n")
+    lock = tmp_path / "transitive.lock"
+    lock.write_text("\n".join(_complete_lock_lines()) + "\n")
+
+    with pytest.raises(PackagingError, match="unsupported"):
+        packaging_mod.validate_macos_release_lock(lock, inventory)
+
+
+@pytest.mark.parametrize(
+    "requirement",
+    [
         "package===1.0 --hash=sha256:" + "a" * 64,
         "package>=1.0 --hash=sha256:" + "a" * 64,
         "package==1.0==extra --hash=sha256:" + "a" * 64,
