@@ -7,6 +7,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build unsigned .app on macos-14 (arm64)
@@ -25,21 +28,22 @@ jobs:
       - name: Install ffmpeg
         run: brew install ffmpeg
 
+      - name: Validate bundled media tools
+        run: |
+          test "$(uname -m)" = "arm64"
+          file $(command -v ffmpeg) | grep -q arm64
+          file $(command -v ffprobe) | grep -q arm64
+          ffmpeg -version
+          ffprobe -version
+          shasum -a 256 $(command -v ffmpeg) $(command -v ffprobe)
+
       # On macOS arm64 the default torch/onnxruntime wheels are CPU/MPS,
       # so no CUDA extra is installed. Do NOT add a [gpu] extra here:
       # it would pull the multi-gigabyte CUDA stack that only exists on Linux.
       # Pinned to the locally validated stack (see DECISIONS.md, D-011) so
       # CI reproduces the exact versions used for development and testing.
       - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install \
-            PySide6==6.11.2 \
-            audio-separator==0.47.0 \
-            soundfile==0.14.0 \
-            pytest==9.1.1 \
-            pytest-qt==4.5.0 \
-            pyinstaller==6.22.3
+        run: python -m pip install -r packaging/requirements-macos.txt
 
       - name: Run tests (offscreen, fast only)
         env:
@@ -55,11 +59,18 @@ jobs:
       - name: Smoke test the bundled binary
         env:
           QT_QPA_PLATFORM: offscreen
-        run: ./dist/StemSeparator.app/Contents/MacOS/StemSeparator --help
+        run: |
+          python -m scripts.smoke_bundle dist/StemSeparator.app/Contents/Frameworks
+          ./dist/StemSeparator.app/Contents/MacOS/StemSeparator --help
 
       - name: Package the .app as a zip
         working-directory: dist
         run: ditto -c -k --sequesterRsrc --keepParent StemSeparator.app StemSeparator-macos.zip
+
+      - name: Measure and checksum artifact
+        run: |
+          du -h dist/StemSeparator-macos.zip
+          shasum -a 256 dist/StemSeparator-macos.zip | tee dist/StemSeparator-macos.zip.sha256
 
       # GitHub caps individual artifacts (currently ~2 GB zipped). If the zip
       # ever exceeds that limit, fall back to publishing the archive as a
@@ -69,4 +80,6 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: StemSeparator-macos
-          path: dist/StemSeparator-macos.zip
+          path: |
+            dist/StemSeparator-macos.zip
+            dist/StemSeparator-macos.zip.sha256

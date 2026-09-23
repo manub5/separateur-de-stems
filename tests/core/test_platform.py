@@ -146,9 +146,20 @@ def test_ffmpeg_executable_prefers_bundled(monkeypatch, tmp_path):
     bundled = bundle / "ffmpeg" / "ffmpeg"
     bundled.parent.mkdir(parents=True)
     bundled.write_bytes(b"")
+    bundled.chmod(0o755)
     monkeypatch.setattr(sys, "_MEIPASS", str(bundle), raising=False)
 
     assert platform_mod.ffmpeg_executable() == str(bundled)
+
+
+def test_ffmpeg_executable_ignores_non_executable_bundle(monkeypatch, tmp_path):
+    bundled = tmp_path / "bundle" / "ffmpeg" / "ffmpeg"
+    bundled.parent.mkdir(parents=True)
+    bundled.write_bytes(b"")
+    bundled.chmod(0o644)
+    monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path / "bundle"), raising=False)
+
+    assert platform_mod.ffmpeg_executable() == "ffmpeg"
 
 
 def test_ffmpeg_executable_falls_back_to_path(monkeypatch):

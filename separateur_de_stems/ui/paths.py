@@ -13,6 +13,8 @@ from pathlib import Path
 
 from PySide6.QtCore import QStandardPaths
 
+from separateur_de_stems.core.bundle_manifest import BundleManifestError, validate_model_bundle
+
 __all__ = [
     "is_frozen",
     "default_model_dir",
@@ -42,7 +44,15 @@ def _app_data_dir() -> Path:
 def default_model_dir() -> str:
     """Directory holding the separation models."""
     if is_frozen():
-        return str(_app_data_dir() / "models")
+        bundle_root = getattr(sys, "_MEIPASS", None)
+        if bundle_root:
+            bundled_models = Path(bundle_root) / "models"
+            try:
+                validate_model_bundle(bundled_models, require_distributable=True)
+            except BundleManifestError:
+                pass
+            else:
+                return str(bundled_models)
     return "models"
 
 

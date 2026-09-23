@@ -27,13 +27,16 @@
 
 ## En cours
 
-- Rien.
+- Durcissement de la livraison hors ligne : gate strict et smoke bundle
+  implémentés ; validation macOS arm64 réelle en attente du workflow.
 
 ## À faire
 
-- Rien (Plan C terminé). Suite éventuelle : signature/notarisation Apple,
-  accélération MPS/CoreML à revérifier sur une machine Apple Silicon.
+- Compléter et valider légalement les actifs de `models/manifest.json`, puis
+  exécuter le workflow macOS arm64. Signature/notarisation Apple et accélération
+  MPS/CoreML restent ensuite à revérifier.
 
 ## Bloqué
 
-- Rien.
+- Build distribuable bloqué intentionnellement : poids/configurations/checksums
+  et licences des modèles incomplets.

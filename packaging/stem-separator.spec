@@ -4,17 +4,25 @@ import sys
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_submodules
+from separateur_de_stems.core.packaging import validate_build_inputs
 
 ROOT = Path(SPECPATH).parent
 APP_NAME = "StemSeparator"
 
+ffmpeg_src = shutil.which("ffmpeg")
+ffprobe_src = shutil.which("ffprobe")
+i18n_dir = ROOT / "separateur_de_stems" / "ui" / "i18n"
+model_assets = validate_build_inputs(
+    ROOT / "models", i18n_dir, ffmpeg_src, ffprobe_src
+)
+
 datas = []
 datas += collect_data_files("audio_separator")
 datas += collect_data_files("separateur_de_stems")
+datas += [(str(asset), "models") for asset in model_assets]
 
 # Compiled Qt translations, resolved at runtime from
 # <sys._MEIPASS>/separateur_de_stems/ui/i18n.
-i18n_dir = ROOT / "separateur_de_stems" / "ui" / "i18n"
 for qm in sorted(i18n_dir.glob("*.qm")):
     datas.append((str(qm), "separateur_de_stems/ui/i18n"))
 
@@ -29,12 +37,8 @@ for module in ("audio_separator.separator", "onnxruntime", "soundfile", "librosa
 binaries = []
 binaries += collect_dynamic_libs("onnxruntime")
 
-ffmpeg_src = shutil.which("ffmpeg")
-if ffmpeg_src:
-    binaries.append((ffmpeg_src, "ffmpeg"))
-ffprobe_src = shutil.which("ffprobe")
-if ffprobe_src:
-    binaries.append((ffprobe_src, "ffmpeg"))
+binaries.append((ffmpeg_src, "ffmpeg"))
+binaries.append((ffprobe_src, "ffmpeg"))
 
 excludes = [
     "tkinter", "matplotlib", "pytest", "PySide6.QtWebEngineCore",

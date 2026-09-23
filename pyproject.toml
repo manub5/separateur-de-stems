@@ -2,7 +2,7 @@
 name = "separateur-de-stems"
 version = "0.1.0"
 description = "Desktop audio stem separator using audio-separator"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "audio-separator",
     "soundfile",
@@ -10,7 +10,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-qt"]
+dev = ["pytest", "pytest-qt", "PyYAML"]
 
 [project.scripts]
 separateur-de-stems = "separateur_de_stems.cli:main"

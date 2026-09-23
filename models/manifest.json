@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "required_files": ["download_checks.json"],
+  "models": [
+    {
+      "filename": "vocals_mel_band_roformer.ckpt",
+      "config_files": null,
+      "sha256": null,
+      "size": null,
+      "source": null,
+      "licence": null,
+      "licence_status": "unknown"
+    },
+    {
+      "filename": "model_bs_roformer_ep_317_sdr_12.9755.ckpt",
+      "config_files": ["model_bs_roformer_ep_317_sdr_12.9755.yaml"],
+      "sha256": null,
+      "size": null,
+      "source": "https://github.com/TRvlvr/model_repo/releases/download/all_public_uvr_models/model_bs_roformer_ep_317_sdr_12.9755.ckpt",
+      "licence": null,
+      "licence_status": "unknown"
+    },
+    {
+      "filename": "htdemucs_ft.yaml",
+      "config_files": null,
+      "sha256": null,
+      "size": null,
+      "source": "https://github.com/TRvlvr/model_repo/releases/download/all_public_uvr_models/htdemucs_ft.yaml",
+      "licence": null,
+      "licence_status": "unknown"
+    },
+    {
+      "filename": "hdemucs_mmi.yaml",
+      "config_files": null,
+      "sha256": null,
+      "size": null,
+      "source": "https://github.com/TRvlvr/model_repo/releases/download/all_public_uvr_models/hdemucs_mmi.yaml",
+      "licence": null,
+      "licence_status": "unknown"
+    },
+    {
+      "filename": "htdemucs_6s.yaml",
+      "config_files": null,
+      "sha256": null,
+      "size": null,
+      "source": "https://github.com/TRvlvr/model_repo/releases/download/all_public_uvr_models/htdemucs_6s.yaml",
+      "licence": null,
+      "licence_status": "unknown"
+    }
+  ]
+}

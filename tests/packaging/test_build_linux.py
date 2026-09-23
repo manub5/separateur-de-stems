@@ -15,6 +15,10 @@ def test_build_script_exists_and_is_executable():
     assert os.access(SCRIPT, os.X_OK)
 
 
+def test_build_script_runs_bundle_smoke_as_module():
+    assert "-m scripts.smoke_bundle" in SCRIPT.read_text()
+
+
 @pytest.mark.slow
 def test_bundled_binary_help_runs():
     if not BINARY.is_file():

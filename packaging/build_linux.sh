@@ -13,4 +13,5 @@ PYTHON="${PYTHON:-../../.venv/bin/python}"
 
 "$PYTHON" -m PyInstaller --noconfirm --clean packaging/stem-separator.spec
 
+"$PYTHON" -m scripts.smoke_bundle dist/StemSeparator/_internal
 QT_QPA_PLATFORM=offscreen dist/StemSeparator/StemSeparator --help

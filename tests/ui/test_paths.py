@@ -7,6 +7,7 @@ Qt is run in offscreen mode.
 
 import os
 import sys
+import json
 
 import pytest
 
@@ -38,11 +39,34 @@ def test_default_cache_dir_dev():
     assert paths.default_cache_dir() == ".cache"
 
 
-def test_default_model_dir_frozen(monkeypatch):
+def test_default_model_dir_frozen_without_valid_manifest_stays_explicit(monkeypatch):
     monkeypatch.setattr(sys, "frozen", True, raising=False)
-    result = paths.default_model_dir()
-    assert result.endswith("models")
-    assert "StemSeparator" in result
+    monkeypatch.setattr(sys, "_MEIPASS", "/missing-bundle", raising=False)
+    assert paths.default_model_dir() == "models"
+
+
+def test_default_model_dir_frozen_uses_complete_bundle(monkeypatch, tmp_path):
+    models = tmp_path / "models"
+    models.mkdir()
+    payload = models / "model.bin"
+    payload.write_bytes(b"model")
+    import hashlib
+    manifest = {
+        "schema_version": 1,
+        "models": [{
+            "filename": "model.bin", "config_files": [],
+            "sha256": hashlib.sha256(b"model").hexdigest(), "size": 5,
+            "source": "https://example.invalid/model", "licence": "MIT",
+            "licence_status": "distributable"
+        }],
+        "required_files": ["download_checks.json"]
+    }
+    (models / "download_checks.json").write_text("{}")
+    (models / "manifest.json").write_text(json.dumps(manifest))
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)
+
+    assert paths.default_model_dir() == str(models)
 
 
 def test_default_cache_dir_frozen(monkeypatch):

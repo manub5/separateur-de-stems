@@ -53,10 +53,10 @@ def test_workflow_installs_python_and_dependencies():
 
 def test_workflow_pins_dependency_versions():
     """Dependencies are pinned to the locally validated stack."""
-    text = _workflow_text()
+    text = Path("packaging/requirements-macos.txt").read_text()
     assert "PySide6==6.11.2" in text
     assert "audio-separator==0.47.0" in text
-    assert "pyinstaller==6.22.3" in text
+    assert "pyinstaller==6.22.3" in text.lower()
     assert "soundfile==" in text
     assert "pytest==" in text
     assert "pytest-qt==" in text
@@ -101,3 +101,23 @@ def test_workflow_packages_and_uploads_artifact():
     assert "# v4" in text
     assert "StemSeparator-macos" in text
     assert "dist/StemSeparator-macos.zip" in text
+
+
+def test_workflow_has_read_only_permissions_and_reproducible_requirements():
+    data = _load()
+    assert data["permissions"] == {"contents": "read"}
+    install = next(
+        step["run"] for step in data["jobs"]["build"]["steps"]
+        if step.get("name") == "Install Python dependencies"
+    )
+    assert "requirements-macos.txt" in install
+    assert "--upgrade pip" not in install
+
+
+def test_workflow_validates_binary_architecture_smokes_and_hashes_artifact():
+    text = _workflow_text()
+    assert "file $(command -v ffmpeg)" in text
+    assert "ffprobe -version" in text
+    assert "-m scripts.smoke_bundle" in text
+    assert "shasum -a 256" in text
+    assert "du -h" in text

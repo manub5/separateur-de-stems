@@ -138,3 +138,20 @@ Python installés sur la machine cible, tout en gardant un bundle raisonnable.
 - **Actions GitHub épinglées par SHA** : toutes les `uses:` sont figées sur un
   SHA de commit (avec la version en commentaire), exigence semgrep et garantie
   de reproductibilité face aux étiquettes mouvantes.
+
+## D-012 — Distribution hors ligne bloquée par manifeste strict
+
+Raison : les poids et licences de la sélection ne sont pas tous disponibles ou
+résolus. `models/manifest.json` inventorie donc chaque nom sélectionné et marque
+explicitement les champs inconnus. La spec PyInstaller refuse le build avant
+l'analyse tant qu'un actif, une configuration, une taille, un SHA-256, une
+source ou un statut de licence distribuable manque. En développement, le chemin
+`models/` et les overrides utilisateur restent disponibles ; un exécutable figé
+n'utilise `_MEIPASS/models` par défaut qu'après validation complète du manifeste.
+Le contrôle lit les gros poids par blocs pour ne pas les charger en mémoire.
+
+Le workflow macOS utilise `packaging/requirements-macos.txt`, vérifie les outils
+multimédia arm64, puis inspecte le bundle et encode un signal synthétique avec
+un `PATH` vide. La publication reste de fait impossible tant que le gate strict
+échoue. Les versions transitives ne sont pas encore verrouillées avec des hashes
+et ne doivent pas être présentées comme telles.

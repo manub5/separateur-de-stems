@@ -10,3 +10,6 @@
 - Q-004 : les licences des modèles retenus restent « À vérifier » dans
   MODELS.md. Vérifier leur compatibilité avec une diffusion publique de
   l'application avant toute distribution.
+- Q-005 : compléter `models/manifest.json` avec les fichiers réellement
+  retenus, leurs configurations, tailles, SHA-256, sources et licences vérifiées.
+  Le build distribuable est volontairement bloqué jusque-là.

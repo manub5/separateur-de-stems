@@ -1,4 +1,9 @@
 from pathlib import Path
+import runpy
+
+import pytest
+
+from separateur_de_stems.core.packaging import PackagingError
 
 SPEC = Path("packaging/stem-separator.spec")
 RUNTIME_HOOK = Path("packaging/runtime_hook.py")
@@ -30,3 +35,8 @@ def test_spec_uses_real_bundle_identifier():
     assert "bundle_identifier" in text
     assert "com.example" not in text
     assert "io.github.numa91.stemseparator" in text
+
+
+def test_spec_fails_before_analysis_when_offline_manifest_is_incomplete():
+    with pytest.raises(PackagingError, match="manifest"):
+        runpy.run_path(str(SPEC), init_globals={"SPECPATH": str(SPEC.parent)})

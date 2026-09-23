@@ -30,12 +30,7 @@ def ffmpeg_executable() -> str:
     ``<sys._MEIPASS>/ffmpeg/ffmpeg``; otherwise fall back to ``ffmpeg`` so
     the system PATH is searched.
     """
-    bundle_root = getattr(sys, "_MEIPASS", None)
-    if bundle_root:
-        bundled = Path(bundle_root) / "ffmpeg" / "ffmpeg"
-        if bundled.is_file():
-            return str(bundled)
-    return "ffmpeg"
+    return _bundled_ffmpeg_path() or "ffmpeg"
 
 
 def _bundled_ffmpeg_path() -> str | None:
