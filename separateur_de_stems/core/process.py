@@ -32,11 +32,9 @@ def _child_entry_point(
 
 
 def _default_worker(queue, input_path, stems, engine_kwargs, progress_queue=None):
-    """Real worker: runs a SeparationEngine inside the child process."""
+    """Real worker: runs the complete pipeline inside the child process."""
     try:
-        from separateur_de_stems.core.engine import SeparationEngine
-
-        engine = SeparationEngine(**engine_kwargs)
+        from separateur_de_stems.core.pipeline import run_pipeline
 
         def progress_cb(percent, stage):
             if progress_queue is None:
@@ -46,7 +44,7 @@ def _default_worker(queue, input_path, stems, engine_kwargs, progress_queue=None
             except Exception:  # noqa: BLE001
                 pass
 
-        result = engine.run(input_path, stems, progress_cb=progress_cb)
+        result = run_pipeline(input_path, stems, progress_cb=progress_cb, **engine_kwargs)
         queue.put(("ok", dict(result)))
     except StemSeparatorError as error:
         queue.put(("error", str(error)))
@@ -110,19 +108,27 @@ class SubprocessSeparator:
 
             self._pending_progress = []
             self._ensure_progress_queue()
-            self._queue = self._context.Queue()
-            self._process = self._context.Process(
-                target=_child_entry_point,
-                args=(
-                    self._worker_target,
-                    self._queue,
-                    input_path,
-                    stems,
-                    *self._worker_args,
-                ),
-                kwargs={"progress_queue": self._progress_queue},
-            )
-            self._process.start()
+            queue = None
+            process = None
+            try:
+                queue = self._context.Queue()
+                process = self._context.Process(
+                    target=_child_entry_point,
+                    args=(
+                        self._worker_target,
+                        queue,
+                        input_path,
+                        stems,
+                        *self._worker_args,
+                    ),
+                    kwargs={"progress_queue": self._progress_queue},
+                )
+                process.start()
+            except BaseException:
+                self._finish_locked(process, queue)
+                raise
+            self._queue = queue
+            self._process = process
 
     def poll_progress(self) -> list:
         messages = self._pending_progress

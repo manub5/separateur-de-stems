@@ -7,15 +7,13 @@ from pathlib import Path
 from typing import Optional
 
 from separateur_de_stems.core.catalog import fetch_catalog, top_models_for_stem
-from separateur_de_stems.core.engine import SeparationEngine
 from separateur_de_stems.core.errors import (
     CancelledError,
     OutputError,
     StemSeparatorError,
 )
-from separateur_de_stems.core.export import to_mp3_320, to_wav24
 from separateur_de_stems.core.models import STEM_TO_MODEL
-from separateur_de_stems.core.naming import sanitize, stem_filename
+from separateur_de_stems.core.pipeline import run_pipeline
 from separateur_de_stems.core.platform import ensure_bundled_ffmpeg_on_path
 
 CANONICAL_STEMS = tuple(STEM_TO_MODEL.keys())
@@ -100,14 +98,14 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 2
 
     try:
-        _ensure_output_dir(args.output_dir)
-        engine = SeparationEngine(args.model_dir, args.output_dir)
-        outputs = engine.run(
+        run_pipeline(
             args.input,
             stems,
+            args.output_dir,
+            args.model_dir,
+            include_mp3=not args.no_mp3,
             progress_cb=_print_progress,
         )
-        _export(args.input, outputs, stems, args.output_dir, args.no_mp3)
     except CancelledError:
         print("Séparation annulée.", file=sys.stderr)
         return 130
@@ -133,79 +131,6 @@ def _ensure_output_dir(output_dir: str) -> None:
 
 def _print_progress(percent: int, message: str) -> None:
     print(f"[{percent}%] {message}")
-
-
-def _export(
-    input_path: str,
-    outputs: dict[str, str],
-    stems: set[str],
-    output_dir: str,
-    no_mp3: bool,
-) -> None:
-    exported_targets: list[str] = []
-    intermediates: list[str] = []
-    for stem in sorted(stems & outputs.keys()):
-        source = outputs[stem]
-        if not Path(source).is_file():
-            raise OutputError(
-                f"Fichier de sortie introuvable pour la piste {stem} : {source}"
-            )
-        intermediates.append(source)
-        wav_base = _natural_target(input_path, stem, "wav", output_dir)
-        if _same_file(source, wav_base):
-            raise OutputError(
-                "Le fichier intermédiaire du moteur et la cible d'export "
-                f"coïncident : {wav_base}"
-            )
-        wav_path = stem_filename(input_path, stem, "wav", output_dir)
-        if _same_file(source, wav_path):
-            raise OutputError(
-                "Le fichier intermédiaire du moteur et la cible d'export "
-                f"coïncident : {wav_path}"
-            )
-        to_wav24(source, wav_path)
-        exported_targets.append(wav_path)
-        if not no_mp3:
-            mp3_path = stem_filename(input_path, stem, "mp3", output_dir)
-            if _same_file(wav_path, mp3_path):
-                raise OutputError(
-                    "La cible WAV et la cible MP3 coïncident : " f"{mp3_path}"
-                )
-            to_mp3_320(wav_path, mp3_path)
-            exported_targets.append(mp3_path)
-
-    _remove_intermediates(intermediates, exported_targets)
-
-
-def _natural_target(input_path: str, stem: str, ext: str, output_dir: str) -> str:
-    source_name = sanitize(Path(input_path).stem)
-    stem_name = sanitize(stem)
-    return str(Path(output_dir) / f"{source_name}_{stem_name}.{ext.lstrip('.')}")
-
-
-def _same_file(first: str, second: str) -> bool:
-    try:
-        return Path(first).resolve() == Path(second).resolve()
-    except OSError:
-        return False
-
-
-def _remove_intermediates(
-    intermediates: list[str], export_targets: list[str]
-) -> None:
-    protected = {str(Path(path).resolve()) for path in export_targets}
-    for path in intermediates:
-        try:
-            link = Path(path)
-            resolved = str(link.resolve())
-            if resolved in protected:
-                continue
-            if link.is_symlink():
-                link.unlink()
-            else:
-                Path(path).unlink()
-        except OSError:
-            pass
 
 
 def _list_models(model_dir: str) -> int:

@@ -117,6 +117,39 @@ def test_engine_rejects_missing_model_before_inference(tmp_path):
     assert factory.instances == []
 
 
+def test_engine_maps_catalogue_construction_failure_to_model_error(tmp_path):
+    engine = make_engine(
+        tmp_path,
+        None,
+        RecordingFactory(lambda index: ([], None)),
+        catalog_fetcher=lambda model_dir: (_ for _ in ()).throw(RuntimeError("catalog boom")),
+    )
+
+    with pytest.raises(ModelUnavailableError, match="catalog boom"):
+        engine.run(make_input(tmp_path), {"vocals"})
+
+
+def test_engine_maps_separator_factory_failure_to_model_error(tmp_path):
+    def factory(**kwargs):
+        raise RuntimeError("factory boom")
+
+    engine = make_engine(tmp_path, None, factory)
+
+    with pytest.raises(ModelUnavailableError, match="factory boom"):
+        engine.run(make_input(tmp_path), {"vocals"})
+
+
+def test_engine_maps_load_model_failure_to_model_error(tmp_path):
+    class BrokenLoader(FakeSeparator):
+        def load_model(self, filename):
+            raise RuntimeError("load boom")
+
+    engine = make_engine(tmp_path, None, lambda **kwargs: BrokenLoader(**kwargs))
+
+    with pytest.raises(ModelUnavailableError, match="load boom"):
+        engine.run(make_input(tmp_path), {"vocals"})
+
+
 def test_engine_accepts_catalog_with_all_required_models(tmp_path):
     output_dir = tmp_path / "out"
     factory = RecordingFactory(
@@ -324,6 +357,24 @@ def test_engine_filters_complementary_stems(tmp_path):
     result = engine.run(make_input(tmp_path), {"vocals"})
 
     assert result == {"vocals": f"{output_dir}/song_(Vocals)_x.wav"}
+
+
+def test_engine_rejects_any_auxiliary_output_outside_private_directory(tmp_path):
+    output_dir = tmp_path / "out"
+    external = tmp_path / "external_(Instrumental).wav"
+    external.write_bytes(b"keep")
+    factory = RecordingFactory(
+        lambda index: (
+            [f"{output_dir}/song_(Vocals)_x.wav", str(external)],
+            None,
+        )
+    )
+    engine = make_engine(tmp_path, None, factory)
+
+    with pytest.raises(OutputError, match="outside"):
+        engine.run(make_input(tmp_path), {"vocals"})
+
+    assert external.read_bytes() == b"keep"
 
 
 def test_engine_keeps_assigned_stem_when_later_model_also_outputs_it(tmp_path):

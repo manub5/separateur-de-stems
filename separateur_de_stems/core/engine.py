@@ -64,7 +64,14 @@ class SeparationEngine:
                 f"Unsupported input format: {source.suffix}"
             )
 
-        catalog = self._catalog_fetcher(self._model_dir)
+        try:
+            catalog = self._catalog_fetcher(self._model_dir)
+        except StemSeparatorError:
+            raise
+        except Exception as error:  # noqa: BLE001
+            raise ModelUnavailableError(
+                f"Cannot build model catalogue: {error}"
+            ) from error
         verify_selected_models(catalog, stems)
 
         models = select_models(stems)
@@ -79,13 +86,20 @@ class SeparationEngine:
             start = int(index * 90 / total)
             self._report(progress_cb, start, f"Loading model {model.filename}")
 
-            separator = self._separator_factory(
-                model_file_dir=self._model_dir,
-                output_dir=self._output_dir,
-                output_format="WAV",
-                log_level=self._log_level,
-            )
-            separator.load_model(model.filename)
+            try:
+                separator = self._separator_factory(
+                    model_file_dir=self._model_dir,
+                    output_dir=self._output_dir,
+                    output_format="WAV",
+                    log_level=self._log_level,
+                )
+                separator.load_model(model.filename)
+            except StemSeparatorError:
+                raise
+            except Exception as error:  # noqa: BLE001
+                raise ModelUnavailableError(
+                    f"Cannot load model {model.filename}: {error}"
+                ) from error
 
             self._report(
                 progress_cb,
@@ -155,6 +169,7 @@ class SeparationEngine:
         model_filename: str,
     ) -> None:
         for output in outputs:
+            resolved = self._resolve_output(output)
             stem = self._stem_from_output(output)
             if stem is None:
                 continue
@@ -162,12 +177,19 @@ class SeparationEngine:
                 continue
             if STEM_TO_MODEL.get(stem) != model_filename:
                 continue
-            collected[stem] = self._resolve_output(output)
+            collected[stem] = resolved
 
     def _resolve_output(self, output: str) -> str:
-        if os.path.isabs(output):
-            return output
-        return os.path.join(self._output_dir, output)
+        path = Path(output)
+        if not path.is_absolute():
+            path = Path(self._output_dir) / path
+        try:
+            path.resolve().relative_to(Path(self._output_dir).resolve())
+        except ValueError as error:
+            raise OutputError(
+                f"Model output is outside the private output directory: {output}"
+            ) from error
+        return str(path)
 
     def _stem_from_output(self, path: str) -> Optional[str]:
         basename = Path(path).stem

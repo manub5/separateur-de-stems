@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from separateur_de_stems.core.errors import CancelledError
+from separateur_de_stems.core.errors import CancelledError, OutputError
 from separateur_de_stems.ui import worker as worker_module
 from separateur_de_stems.ui.run_context import RunContext
 from separateur_de_stems.ui.worker import SeparationWorker
@@ -188,7 +188,8 @@ def test_factory_receives_model_and_output_dir(qtbot):
         worker.start()
     kwargs = factory.factory_kwargs
     assert kwargs["engine_kwargs"]["model_dir"] == "/some/models"
-    assert kwargs["engine_kwargs"]["output_dir"] == "/some/work"
+    assert kwargs["engine_kwargs"]["output_dir"] == "/final/out"
+    assert kwargs["engine_kwargs"]["_workspace"] == "/some/work"
     assert kwargs["progress_queue"] is not None
 
 
@@ -350,7 +351,7 @@ def test_partial_result_publishes_no_deliverables(tmp_path):
     raw = Path(context.workspace) / "vocals.wav"
     raw.write_bytes(b"raw")
 
-    with pytest.raises(RuntimeError, match="Missing outputs"):
+    with pytest.raises(OutputError, match="Missing outputs"):
         worker_module._finalize_outputs(
             context,
             {"vocals": str(raw)},

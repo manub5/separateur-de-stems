@@ -50,6 +50,47 @@ def test_to_wav24_preserves_channel_count(tmp_path):
     assert sf.info(str(dest)).channels == 2
 
 
+def test_to_wav24_reads_source_in_bounded_blocks(tmp_path, monkeypatch):
+    source, _ = write_source(tmp_path)
+    dest = tmp_path / "stem24.wav"
+    real_sound_file = sf.SoundFile
+    read_sizes = []
+
+    class TrackingSoundFile:
+        def __init__(self, *args, **kwargs):
+            self._file = real_sound_file(*args, **kwargs)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            self._file.close()
+
+        def __getattr__(self, name):
+            return getattr(self._file, name)
+
+        def read(self, frames=-1, *args, **kwargs):
+            read_sizes.append(frames)
+            assert 0 < frames <= 65536
+            return self._file.read(frames, *args, **kwargs)
+
+        def write(self, data):
+            return self._file.write(data)
+
+    monkeypatch.setattr(sf, "SoundFile", TrackingSoundFile)
+    monkeypatch.setattr(
+        sf,
+        "read",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("whole-file sf.read must not be used")
+        ),
+    )
+
+    to_wav24(str(source), str(dest))
+
+    assert read_sizes
+
+
 def test_to_wav24_creates_parent_directory(tmp_path):
     source, _ = write_source(tmp_path)
     dest = tmp_path / "nested" / "deeper" / "stem24.wav"
@@ -79,11 +120,15 @@ def test_to_wav24_leaves_no_partial_dest_on_write_failure(tmp_path, monkeypatch)
     source, _ = write_source(tmp_path)
     dest = tmp_path / "stem24.wav"
 
-    def exploding_write(*args, **kwargs):
-        Path(args[0]).write_bytes(b"partial")
-        raise RuntimeError("write boom")
+    real_sound_file = sf.SoundFile
 
-    monkeypatch.setattr(sf, "write", exploding_write)
+    def exploding_open(path, mode="r", **kwargs):
+        if mode == "w":
+            Path(path).write_bytes(b"partial")
+            raise RuntimeError("write boom")
+        return real_sound_file(path, mode, **kwargs)
+
+    monkeypatch.setattr(sf, "SoundFile", exploding_open)
 
     with pytest.raises(OutputError):
         to_wav24(str(source), str(dest))
@@ -96,10 +141,10 @@ def test_to_wav24_does_not_delete_preexisting_dest_on_failure(tmp_path, monkeypa
     dest = tmp_path / "stem24.wav"
     dest.write_bytes(b"keep me")
 
-    def exploding_read(*args, **kwargs):
+    def exploding_open(*args, **kwargs):
         raise RuntimeError("read boom")
 
-    monkeypatch.setattr(sf, "read", exploding_read)
+    monkeypatch.setattr(sf, "SoundFile", exploding_open)
 
     with pytest.raises(OutputError):
         to_wav24(str(source), str(dest))

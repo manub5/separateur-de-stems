@@ -12,6 +12,7 @@ from separateur_de_stems.core.platform import ffmpeg_executable
 
 _MP3_BITRATE = "320k"
 _STDERR_TAIL = 400
+_WAV_BLOCK_FRAMES = 65536
 
 
 def _ensure_parent(dest: str) -> Path:
@@ -39,8 +40,20 @@ def to_wav24(src: str, dest: str) -> str:
     target = _ensure_parent(dest)
     preexisting = target.exists()
     try:
-        data, sample_rate = sf.read(src, always_2d=True)
-        sf.write(str(target), data, sample_rate, subtype="PCM_24")
+        with sf.SoundFile(src, "r") as source:
+            with sf.SoundFile(
+                str(target),
+                "w",
+                samplerate=source.samplerate,
+                channels=source.channels,
+                subtype="PCM_24",
+                format="WAV",
+            ) as destination:
+                while True:
+                    data = source.read(_WAV_BLOCK_FRAMES, always_2d=True)
+                    if not len(data):
+                        break
+                    destination.write(data)
     except OutputError:
         raise
     except Exception as error:  # noqa: BLE001

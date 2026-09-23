@@ -252,6 +252,53 @@ def test_start_twice_raises_runtime_error(tmp_path):
         runner.cancel()
 
 
+def test_failed_process_start_resets_state_closes_queue_and_allows_retry(tmp_path):
+    class Queue:
+        def __init__(self):
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+        def join_thread(self):
+            pass
+
+    class Process:
+        attempts = 0
+
+        def start(self):
+            Process.attempts += 1
+            if Process.attempts == 1:
+                raise OSError("spawn boom")
+
+        def join(self, timeout=0):
+            pass
+
+        def is_alive(self):
+            return False
+
+    class Context:
+        def __init__(self):
+            self.queues = []
+
+        def Queue(self):
+            queue = Queue()
+            self.queues.append(queue)
+            return queue
+
+        def Process(self, **kwargs):
+            return Process()
+
+    context = Context()
+    runner = SubprocessSeparator(engine_kwargs={}, context=context)
+
+    with pytest.raises(OSError, match="spawn boom"):
+        runner.start(str(tmp_path / "in.wav"), {"vocals"})
+
+    assert context.queues[0].closed is True
+    runner.start(str(tmp_path / "in.wav"), {"vocals"})
+
+
 def test_instance_can_run_twice_with_progress_queue(tmp_path):
     context = multiprocessing.get_context("spawn")
     progress_queue = context.Queue()
