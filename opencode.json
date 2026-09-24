@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "external_directory": "deny",
+    "bash": {
+      "*": "allow",
+      "sudo *": "deny",
+      "git push*": "deny",
+      "git config --global*": "deny",
+      "* --no-verify*": "deny",
+      "apt *": "deny"
+    }
+  }
+}
