@@ -1,6 +1,7 @@
 """Application entry point for the PySide6 desktop interface."""
 
 import argparse
+import os
 import sys
 
 from PySide6.QtWidgets import QApplication
@@ -30,6 +31,9 @@ def main(argv: list[str] | None = None) -> int:
     ensure_bundled_ffmpeg_on_path()
 
     args = build_parser().parse_args(argv)
+
+    if sys.platform.startswith("linux"):
+        os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
 
     app = QApplication.instance() or QApplication(sys.argv[:1])
     settings = Settings()

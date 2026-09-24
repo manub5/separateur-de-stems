@@ -169,3 +169,14 @@ markers et doublons, exige les mêmes versions directes que l'inventaire, un
 ensemble strictement supérieur, ainsi que les transitifs critiques observables
 dans l'application : `torch`, `numpy`, `onnxruntime`, `librosa` et `pydub`.
 Pour un tag, ce lock est l'unique source passée à pip avec `--require-hashes`.
+
+## D-013 — Backend Qt XCB par défaut sous Linux
+
+Sous KDE Wayland avec une carte NVIDIA, l'interface pouvait présenter des zones
+mal redessinées (zébrures disparaissant au survol). Le problème disparaît avec
+`QT_QPA_PLATFORM=xcb`. Le point d'entrée graphique définit donc `xcb` avant
+la création de `QApplication`, uniquement sous Linux et uniquement lorsque
+`QT_QPA_PLATFORM` n'est pas déjà définie. Une valeur explicite, notamment
+`offscreen` pour les tests, reste prioritaire ; macOS et Windows ne sont pas
+modifiés. Effet de bord intentionnel : le démarrage Linux utilise XCB/XWayland
+par défaut plutôt que le backend Wayland natif.

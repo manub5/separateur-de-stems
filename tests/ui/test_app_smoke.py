@@ -6,6 +6,8 @@ an isolated organization/application pair so the real user configuration is
 never read or written.
 """
 
+import os
+
 import pytest
 from PySide6.QtWidgets import QApplication
 
@@ -141,3 +143,48 @@ def test_main_help_exits_zero_without_crash(capsys):
     assert excinfo.value.code == 0
     captured = capsys.readouterr()
     assert "separateur-de-stems-ui" in captured.out
+
+
+@pytest.mark.parametrize(
+    ("platform_name", "initial", "expected"),
+    [
+        ("linux", None, "xcb"),
+        ("linux", "offscreen", "offscreen"),
+        ("darwin", None, None),
+    ],
+)
+def test_qt_platform_is_selected_before_qapplication(
+    monkeypatch, platform_name, initial, expected
+):
+    monkeypatch.setattr(app_module.sys, "platform", platform_name)
+    if initial is None:
+        monkeypatch.delenv("QT_QPA_PLATFORM", raising=False)
+    else:
+        monkeypatch.setenv("QT_QPA_PLATFORM", initial)
+
+    class FakeApplication:
+        @staticmethod
+        def instance():
+            return None
+
+        def __init__(self, argv):
+            assert os.environ.get("QT_QPA_PLATFORM") == expected
+
+        def exec(self):
+            return 0
+
+    class FakeWindow:
+        def __init__(self, settings):
+            pass
+
+        def show(self):
+            pass
+
+    monkeypatch.setattr(app_module, "QApplication", FakeApplication)
+    monkeypatch.setattr(
+        app_module, "Settings", lambda: type("FakeSettings", (), {"language": "en"})()
+    )
+    monkeypatch.setattr(app_module, "MainWindow", FakeWindow)
+    monkeypatch.setattr(app_module.i18n, "install_translators", lambda *args: None)
+
+    assert app_module.main([]) == 0

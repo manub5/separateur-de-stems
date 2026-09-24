@@ -51,6 +51,11 @@ separateur-de-stems-ui
 separateur-de-stems-ui --file morceau.flac
 ```
 
+Sous Linux, l'interface utilise XCB/XWayland par défaut pour éviter des défauts
+de rafraîchissement observés sous KDE Wayland avec NVIDIA. Vous pouvez choisir
+explicitement un autre backend avec `QT_QPA_PLATFORM` ; une valeur déjà définie
+est toujours conservée (par exemple `offscreen` pour les tests).
+
 En développement, les modèles résident dans `models/` ou dans le répertoire
 explicitement choisi dans les réglages. Si un actif manque,
 `audio-separator` peut télécharger et mettre en cache des fichiers selon son
@@ -133,6 +138,11 @@ separateur-de-stems track.mp3 --no-mp3
 separateur-de-stems-ui
 separateur-de-stems-ui --file track.flac
 ```
+
+On Linux, the GUI defaults to XCB/XWayland to avoid redraw artifacts observed
+on KDE Wayland with NVIDIA. Set `QT_QPA_PLATFORM` explicitly to select another
+backend; an existing value is always preserved (for example, `offscreen` for
+tests).
 
 In development, models live in `models/` or in the directory explicitly chosen
 in settings. If an asset is missing, `audio-separator` may download and cache
