@@ -14,3 +14,10 @@ repos:
     rev: v8.30.0
     hooks:
       - id: gitleaks
+  - repo: local
+    hooks:
+      - id: pas-de-chemin-perso
+        name: Refuser les chemins /home/<utilisateur>
+        language: pygrep
+        entry: "/home/[a-z_][a-z0-9_-]*/"
+        types: [text]
