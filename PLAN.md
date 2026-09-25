@@ -22,3 +22,9 @@
 - [x] Ajouter le téléchargement vérifié et reprenable dans `models/`.
 - [x] Griser dans l'interface les pistes dont les modèles manquent et tester chaque piste.
 - [x] Intégrer le téléchargement au workflow macOS personnel et mesurer l'artefact.
+- [x] Préparer ffmpeg/ffprobe Homebrew GPL sur le runner et enregistrer version,
+  source et SHA-256 réels pour l'artefact personnel.
+- [x] Copier/relocaliser les dylib Homebrew et les inclure dans le manifeste du
+  `.app` ; garder la release publique bloquée (Q-006).
+- [ ] Valider les étapes macOS sur runner arm64 sans Homebrew sur la cible, puis
+  confirmer la taille de l'archive et la compatibilité du `.app` (Q-007).

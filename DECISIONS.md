@@ -183,6 +183,24 @@ leur index, soit 1,966 Gio non compressés avant Python/torch/Qt/ffmpeg.
 Les licences des poids demeurent inconnues ; aucune redistribution publique
 avant vérification des droits.
 
+## D-015 — Binaires Homebrew GPL et relocation macOS
+
+La formule officielle ffmpeg annonce `GPL-3.0-or-later` et dépend de x264/x265
+(`GPL-2.0-or-later`). Le hash du bottle ne donne pas celui des exécutables :
+`scripts.prepare_media` relève leurs versions, sources et SHA-256 sur le runner
+macOS. `scripts.relocate_media` copie récursivement les bibliothèques Homebrew
+dans le `.app`, remplace les liens par `@loader_path`, supprime les runpaths
+Homebrew et inventorie source, version, licence et SHA-256 de chaque dylib.
+Le contrôle post-build refuse les dépendances externes ; les tests Linux
+simulent ces parcours. Le runner `macos-15` arm64 remplace `macos-14` déprécié.
+Le manifeste versionné contient les valeurs officielles connues, mais ses
+SHA-256 d'exécutables sont `null` avant un build : le hash d'un bottle Homebrew
+n'est pas celui des binaires extraits. Le manifeste **embarqué dans l'artefact**
+est complété sur le runner avec les hash et l'inventaire des dylib relocalisées.
+La release publique reste bloquée tant que les obligations GPL et le lock
+transitif arm64 ne sont pas résolus (Q-006). Le build personnel n'établit
+pas une autorisation de diffusion publique.
+
 ## D-013 — Backend Qt XCB par défaut sous Linux
 
 Sous KDE Wayland avec une carte NVIDIA, l'interface pouvait présenter des zones

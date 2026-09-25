@@ -96,12 +96,12 @@ def test_each_language_documents_all_release_blockers():
     french, english = map(_normalized, _language_sections())
     assert "poids Demucs" in french
     assert "licences des poids" in french
-    assert "sources et versions des binaires" in french
+    assert "ffmpeg GPL-3.0-or-later" in french
     assert "macos-arm64-transitive.lock" in french
     assert "MPS/CoreML, `renamex_np` et le `.app` final restent non vérifiés" in french
     assert "six Demucs" in english
     assert "Model weight licences" in english
-    assert "sources and versions of redistributed binaries" in english
+    assert "ffmpeg formula declares GPL-3.0-or-later" in english
     assert "macos-arm64-transitive.lock" in english
     assert "MPS/CoreML, `renamex_np`, and the final `.app` remain unverified" in english
 
@@ -127,8 +127,8 @@ def test_third_party_notices_records_only_verified_and_pending_statuses():
     assert "audio-separator 0.47.0" in text
     assert "PySide6 6.11.2" in text
     assert "soundfile 0.14.0" in text
-    assert "ffmpeg / ffprobe: pending" in text
-    assert "Selected UVR models: pending" in text
+    assert "ffmpeg / ffprobe: Homebrew ffmpeg formula" in text
+    assert "Selected UVR models: payloads" in text
     assert "No public release is permitted" in text
 
 

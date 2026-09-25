@@ -1,5 +1,6 @@
 import hashlib
 import json
+from pathlib import Path
 
 from scripts.prepare_media import generate_binary_manifest
 from separateur_de_stems.core.packaging import validate_redistributed_binary_licences
@@ -46,3 +47,12 @@ def test_generator_rejects_formula_without_verified_gpl_or_x264_x265(tmp_path):
     import pytest
     with pytest.raises(PackagingError, match="GPL|x264"):
         generate_binary_manifest(paths, formula, inspect=lambda command: "", output_path=tmp_path / "manifest.json")
+
+
+def test_repository_template_records_gpl_but_never_invents_macos_hashes():
+    data = json.loads(Path("packaging/redistributed-binaries.json").read_text())
+    assert {entry["name"] for entry in data["binaries"]} == {"ffmpeg", "ffprobe"}
+    for entry in data["binaries"]:
+        assert entry["licence"] == "GPL-3.0-or-later"
+        assert entry["licence_status"] == "not-distributable"
+        assert entry["sha256"] is None

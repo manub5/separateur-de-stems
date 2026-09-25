@@ -19,11 +19,13 @@
 - Q-005 : compléter `models/manifest.json` avec les fichiers réellement
   retenus, leurs configurations, tailles, SHA-256, sources et licences vérifiées.
   Le build distribuable est volontairement bloqué jusque-là.
-- Q-006 : vérifier les licences de redistribution des binaires macOS ffmpeg et
-  ffprobe ainsi que leur source, version, architecture, SHA-256 et politique de
-  dépendances dans
-  `packaging/redistributed-binaries.json`, puis générer sur macOS arm64 un lock
-  transitif avec hashes. L'upload d'un tag reste bloqué avant ces validations.
+- Q-006 : Homebrew annonce ffmpeg GPL-3.0-or-later et dépend explicitement de
+  x264/x265 (GPL-2.0-or-later). Source, version et SHA-256 des exécutables et
+  dylib recopiées sont relevés sur le runner macOS ; aucun hash macOS n'est
+  inventé depuis Linux. Un artefact personnel reste possible, mais AUCUNE
+  release publique (tag ni page Releases) tant que les obligations GPL,
+  notices/sources et licences des dépendances ne sont pas traitées. Le lock
+  transitif macOS hashé reste également à produire sur arm64.
 - Q-007 : valider sur un runner macOS arm64 MPS/CoreML, `renamex_np` et le
   fonctionnement réel du `.app` final ; ces chemins restent non vérifiés sous
   Linux.

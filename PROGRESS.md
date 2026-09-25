@@ -43,16 +43,20 @@
   modèle « À vérifier » pour un build personnel (`require_distributable`
   paramétrable) ; le gate de release taggée reste strict et exige en plus
   `validate_model_bundle(..., require_distributable=True)`.
+- Q-006, préparation implémentée : provenance des exécutables Homebrew relevée
+  sur macOS, dylib copiées/relocalisées dans le bundle et inventoriées avec
+  taille, SHA-256 et licence réelle. Le parcours Mach-O est testé sous Linux
+  par simulation ; le statut GPL maintient le gate public fermé. L'exécution
+  effective du workflow sur macOS reste à vérifier.
 
 ## À faire
 
-- Valider le build et les smokes sur macOS arm64 après résolution des blockers
-  restants (licences des poids, métadonnées ffmpeg/ffprobe, lock transitif).
+- Valider le build personnel et les smokes sur le runner macOS arm64. Relever
+  la taille réelle de l'archive et les empreintes binaires générées sur ce Mac.
 
 ## Bloqué
 
-- Build distribuable bloqué intentionnellement : poids/configurations/checksums
-  et licences des modèles incomplets, dont les poids Demucs `.th` pas tous
-  inventoriés ; métadonnées ffmpeg/ffprobe inconnues et lock transitif macOS
-  arm64 hashé absent. MPS/CoreML, `renamex_np` et le `.app` final attendent une
-  validation sur runner macOS arm64.
+- Release publique bloquée intentionnellement : licences des poids à vérifier,
+  obligations GPL des binaires/dylib Homebrew non traitées et lock transitif
+  macOS arm64 hashé absent. MPS/CoreML, `renamex_np` et le `.app` final attendent
+  une validation sur runner macOS arm64.

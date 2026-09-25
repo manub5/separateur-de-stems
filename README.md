@@ -85,16 +85,20 @@ Demucs `.th` sont inventoriés (2 111 361 857 octets, soit 1,966 Gio).
 Le workflow télécharge et vérifie les actifs avant PyInstaller. Il mesure la
 taille réelle de l'archive macOS et applique un plafond conservateur de 2 Gio ;
 le résultat exact sur macOS arm64 reste inconnu avant la première CI. Les
-licences des poids, ainsi que les sources et versions des binaires ffmpeg/ffprobe,
-restent inconnues dans `packaging/redistributed-binaries.json`. Enfin,
+licences des poids restent inconnues. Homebrew annonce ffmpeg GPL-3.0-or-later
+avec x264/x265 sous GPL-2.0-or-later : la conformité d'une diffusion publique
+n'est pas réglée. La CI relève la version et les SHA-256 des exécutables et
+dylib réellement installés, puis relocalise leurs liens dans le `.app`. Enfin,
 `requirements/macos-arm64.lock` n'est qu'un inventaire direct épinglé : le vrai
 `requirements/macos-arm64-transitive.lock` avec hashes n'existe pas encore.
 Aucun artefact public de tag n'est donc autorisé.
 
 Une licence de modèle « À vérifier » est admise pour un build **personnel**,
 mais bloque toujours une release publique. Les autres contrôles, notamment
-l'identification vérifiée de ffmpeg/ffprobe et leurs dépendances macOS, restent
-nécessaires même pour ce build. Comme les poids seuls approchent 2 Gio,
+l'identification vérifiée de ffmpeg/ffprobe et la relocation de leurs
+dépendances macOS restent nécessaires même pour ce build. Le déclenchement
+`workflow_dispatch` utilise un runner `macos-15` arm64. Comme les poids seuls
+approchent 2 Gio,
 l'archive peut dépasser le plafond choisi : la CI échoue alors avant l'upload
 et indique la taille mesurée. Une autre méthode de livraison ne sera choisie
 qu'après validation de sa limite réelle et des licences.
@@ -187,15 +191,18 @@ all six Demucs `.th` weights, are inventoried (2,111,361,857 bytes / 1.966 GiB).
 The workflow downloads and validates them before PyInstaller. It measures the
 actual macOS archive and applies a conservative 2 GiB project upload policy;
 the final macOS arm64 archive size remains unverified until CI. Model weight
-licences and the sources and versions of redistributed binaries remain unknown in
-`packaging/redistributed-binaries.json`. Finally,
+licences remain unknown. The Homebrew ffmpeg formula declares
+GPL-3.0-or-later with GPL-licensed x264/x265; public redistribution obligations
+are unresolved. CI records the installed executable and dylib versions and
+SHA-256 hashes, then relocates their links inside the `.app`. Finally,
 `requirements/macos-arm64.lock` is only a pinned direct inventory; a true
 hashed `requirements/macos-arm64-transitive.lock` does not exist yet. No public
 tag artifact is therefore permitted.
 
 An unverified model licence is acceptable for a **personal** build, but still
-blocks a public release. Verified ffmpeg/ffprobe provenance and macOS runtime
-dependencies remain required even for that build. Model weights alone approach
+blocks a public release. Verified ffmpeg/ffprobe provenance and relocated macOS
+runtime dependencies remain required even for that build. Manual
+`workflow_dispatch` runs on a `macos-15` arm64 runner. Model weights alone approach
 2 GiB: if the measured archive exceeds the chosen policy, CI fails before
 upload and reports its actual size. A different delivery method needs its own
 size-limit and licence verification.

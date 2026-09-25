@@ -17,11 +17,16 @@ hash lock. This notice does not infer licence terms from package names or URLs.
 
 ## Pending Redistribution Information
 
-- Selected UVR models: pending payload/configuration completion, verified
-  sources, sizes, SHA-256 hashes, and licences.
-- ffmpeg / ffprobe: pending source, version, licence, and redistribution status.
+- Selected UVR models: payloads, sources, sizes and SHA-256 are inventoried;
+  licences of the weights still require verification.
+- ffmpeg / ffprobe: Homebrew ffmpeg formula currently states GPL-3.0-or-later
+  and depends on x264 and x265 (GPL-2.0-or-later). Installed versions and hashes
+  are recorded by the macOS build. This is **not** a completed GPL source/notice
+  compliance assessment; the binaries remain non-distributable publicly here.
+- Homebrew dylibs: the personal build records individual formula source,
+  version, licence, byte size and SHA-256 after relocation into the `.app`.
 - Transitive macOS arm64 dependencies: pending a complete lock with verified
   hashes generated on macOS arm64.
 
-No public release is permitted until every redistributed model and binary has
-verified distributable licence metadata and all release gates pass.
+No public release is permitted until model licences and GPL obligations for
+the complete binary dependency closure have been handled and all gates pass.
