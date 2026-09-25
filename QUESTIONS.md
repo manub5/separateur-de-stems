@@ -1,7 +1,12 @@
 # Questions ouvertes
 
-- Q-001 : `htdemucs_6s` n'a pas de score SDR pour guitar/piano. Faut-il
-  chercher un modèle spécialisé hors catalogue UVR pour ces pistes ?
+- Q-001 — Résolue techniquement : `htdemucs_6s.yaml` n'a pas de score SDR
+  publié pour guitar/piano, mais c'est le SEUL modèle de tout le catalogue
+  `audio-separator --list_models` (0.47.0) qui propose ces deux pistes
+  (`--list_filter=guitar` et `--list_filter=piano` ne retournent que lui).
+  La pile technique imposée (AGENTS.md) limite les modèles à ceux exposés par
+  `audio-separator` ; il n'y a donc aucune alternative disponible dans cette
+  bibliothèque pour ces deux pistes.
 - Q-002 — Résolue techniquement : la publication exige des modèles intégrés et
   validés par manifeste ; aucun téléchargement au premier usage n'est prévu.
   La publication reste bloquée tant que les actifs et licences manquent.
