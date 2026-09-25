@@ -63,9 +63,26 @@ class FakeWorker(QObject):
 
 
 def _make_window(qtbot, settings, worker_factory=None):
-    window = MainWindow(settings=settings, worker_factory=worker_factory)
+    window = MainWindow(
+        settings=settings,
+        worker_factory=worker_factory,
+        asset_checker=lambda model_dir: {},
+    )
     qtbot.addWidget(window)
     return window
+
+
+def test_missing_model_disables_checkbox_with_explanation(qtbot, settings):
+    window = MainWindow(
+        settings=settings,
+        asset_checker=lambda model_dir: {"guitar": ("5c90dfd2-34c22ccb.th",)},
+    )
+    qtbot.addWidget(window)
+    checkbox = window.stem_checkboxes["guitar"]
+    assert not checkbox.isEnabled()
+    assert "5c90dfd2-34c22ccb.th" in checkbox.toolTip()
+    assert "guitar" not in window.selected_stems()
+    assert window.stem_checkboxes["piano"].isEnabled()
 
 
 @pytest.fixture

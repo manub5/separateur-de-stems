@@ -1,5 +1,8 @@
 import os
+import json
+import re
 from dataclasses import dataclass, replace
+from pathlib import Path
 
 from separateur_de_stems.core.errors import ModelUnavailableError
 
@@ -86,3 +89,46 @@ def select_models(stems: set[str]) -> list[ModelSpec]:
         STEM_TO_MODEL[stem] for stem in _CANONICAL_STEMS if stem in stems
     )
     return [replace(_MODEL_SPECS[filename]) for filename in filenames]
+
+
+def missing_assets_by_stem(model_dir: str | Path) -> dict[str, tuple[str, ...]]:
+    """List absent model assets for each stem without hashing multi-GB weights in Qt."""
+    root = Path(model_dir)
+    try:
+        manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+        selected = {entry["filename"]: entry["asset_paths"] for entry in manifest["models"]}
+        assets = {entry["path"]: entry for entry in manifest["assets"]}
+        if not all(
+            isinstance(filename, str)
+            and isinstance(paths, list)
+            and paths
+            and all(isinstance(name, str) and Path(name).name == name for name in paths)
+            for filename, paths in selected.items()
+        ) or not all(isinstance(name, str) for name in assets):
+            raise ValueError("Invalid model asset entries")
+    except (OSError, UnicodeError, ValueError, KeyError, TypeError, AttributeError):
+        return {stem: ("manifest.json",) for stem in STEM_TO_MODEL}
+    result = {}
+    for stem, filename in STEM_TO_MODEL.items():
+        missing = []
+        for name in selected.get(filename, [filename]):
+            metadata = assets.get(name)
+            path = root / name
+            try:
+                valid = (
+                    isinstance(metadata, dict)
+                    and isinstance(metadata.get("size"), int)
+                    and metadata["size"] > 0
+                    and isinstance(metadata.get("sha256"), str)
+                    and re.fullmatch(r"[0-9a-f]{64}", metadata["sha256"]) is not None
+                    and path.is_file()
+                    and not path.is_symlink()
+                    and path.stat().st_size == metadata["size"]
+                )
+            except OSError:
+                valid = False
+            if not valid:
+                missing.append(name)
+        if missing:
+            result[stem] = tuple(missing)
+    return result

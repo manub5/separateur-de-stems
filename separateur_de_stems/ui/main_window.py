@@ -31,7 +31,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from separateur_de_stems.core.models import is_supported_audio
+from separateur_de_stems.core.models import is_supported_audio, missing_assets_by_stem
 from separateur_de_stems.core.bundle_manifest import FrozenBundleError
 from separateur_de_stems.ui import i18n
 from separateur_de_stems.ui.drop_zone import DropZone
@@ -49,10 +49,11 @@ _CANONICAL_STEMS = ("vocals", "instrumental", "drums", "bass", "guitar", "piano"
 class MainWindow(QMainWindow):
     """Single-window front-end for the stem separator."""
 
-    def __init__(self, settings: Settings | None = None, worker_factory=None):
+    def __init__(self, settings: Settings | None = None, worker_factory=None, asset_checker=None):
         super().__init__()
         self._settings = settings if settings is not None else Settings()
         self._worker_factory = worker_factory or self._default_worker_factory
+        self._asset_checker = asset_checker or missing_assets_by_stem
         self._worker = None
         self._input_path: str | None = None
         self._running = False
@@ -65,6 +66,7 @@ class MainWindow(QMainWindow):
         self._build_menu()
         self._build_ui()
         self._restore_settings()
+        self._refresh_stem_availability()
         self._update_controls()
 
     # -- construction -----------------------------------------------------
@@ -178,11 +180,32 @@ class MainWindow(QMainWindow):
         return {
             stem
             for stem, checkbox in self.stem_checkboxes.items()
-            if checkbox.isChecked()
+            if checkbox.isChecked() and checkbox.isEnabled()
         }
+
+    def _refresh_stem_availability(self) -> None:
+        self._availability_error = None
+        try:
+            model_dir = self._settings.model_dir.strip() or default_model_dir()
+            missing = self._asset_checker(model_dir)
+        except (FrozenBundleError, OSError, ValueError) as error:
+            self._availability_error = str(error)
+            missing = {stem: (str(error),) for stem in _CANONICAL_STEMS}
+        for stem, checkbox in self.stem_checkboxes.items():
+            unavailable = missing.get(stem)
+            checkbox.setEnabled(not unavailable)
+            checkbox.setToolTip(
+                self.tr("Missing model files: {files}").format(files=", ".join(unavailable))
+                if unavailable else ""
+            )
+        self._update_controls()
 
     def start_separation(self) -> None:
         if self._running or self._exporting:
+            return
+        self._refresh_stem_availability()
+        if self._availability_error:
+            self.on_failed(self._availability_error)
             return
         input_path = self._input_path
         stems = self.selected_stems()
@@ -284,6 +307,7 @@ class MainWindow(QMainWindow):
         dialog = SettingsDialog(self._settings, parent=self)
         dialog.languageChanged.connect(self.apply_language)
         dialog.exec()
+        self._refresh_stem_availability()
 
     def apply_language(self, setting: str) -> None:
         """Persist ``setting`` and install the matching translators.
@@ -433,8 +457,11 @@ class MainWindow(QMainWindow):
         self.output_edit.setEnabled(not running)
         self.choose_button.setEnabled(not running)
         self._settings_action.setEnabled(not running)
-        for checkbox in self.stem_checkboxes.values():
-            checkbox.setEnabled(not running)
+        if running:
+            for checkbox in self.stem_checkboxes.values():
+                checkbox.setEnabled(False)
+        else:
+            self._refresh_stem_availability()
         # Keep the worker reference: the QThread is still unwinding ``run()``
         # when it emits its terminal signal, so dropping it here could destroy
         # a live thread. It is replaced on the next ``start_separation``.
