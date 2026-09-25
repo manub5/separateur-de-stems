@@ -12,8 +12,8 @@ permissions:
 
 jobs:
   build:
-    name: Build unsigned .app on macos-14 (arm64)
-    runs-on: macos-14
+    name: Build unsigned .app on macos-15 (arm64)
+    runs-on: macos-15
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -28,13 +28,16 @@ jobs:
       - name: Install ffmpeg
         run: brew install ffmpeg
 
+      - name: Record installed media provenance and SHA-256
+        run: python -m scripts.prepare_media
+
       - name: Validate bundled media tools
         run: |
           test "$(uname -m)" = "arm64"
           otool -L "$(command -v ffmpeg)"
           otool -L "$(command -v ffprobe)"
           python -m scripts.validate_release --binaries-only --platform darwin \
-            --ffmpeg "$(command -v ffmpeg)" --ffprobe "$(command -v ffprobe)"
+            --allow-homebrew --ffmpeg "$(command -v ffmpeg)" --ffprobe "$(command -v ffprobe)"
 
       # On macOS arm64 the default torch/onnxruntime wheels are CPU/MPS,
       # so no CUDA extra is installed. Do NOT add a [gpu] extra here:
@@ -68,6 +71,9 @@ jobs:
       - name: Build the .app with PyInstaller
         run: python -m PyInstaller --noconfirm --clean packaging/stem-separator.spec
 
+      - name: Bundle and relocate Homebrew media dependencies
+        run: python -m scripts.relocate_media dist/StemSeparator.app
+
       - name: Smoke test the bundled binary
         env:
           QT_QPA_PLATFORM: offscreen
@@ -80,6 +86,7 @@ jobs:
           otool -L dist/StemSeparator.app/Contents/Frameworks/ffmpeg/ffmpeg
           otool -L dist/StemSeparator.app/Contents/Frameworks/ffmpeg/ffprobe
           python -m scripts.validate_release --binaries-only --platform darwin \
+            --binary-licences dist/StemSeparator.app/Contents/Frameworks/ffmpeg/redistributed-binaries.json \
             --ffmpeg dist/StemSeparator.app/Contents/Frameworks/ffmpeg/ffmpeg \
              --ffprobe dist/StemSeparator.app/Contents/Frameworks/ffmpeg/ffprobe
 

@@ -51,6 +51,7 @@ def validate_build_inputs(models_dir, translations_dir, ffmpeg, ffprobe, binary_
         binary_licences,
         {"ffmpeg": Path(ffmpeg), "ffprobe": Path(ffprobe)},
         require_distributable=require_distributable,
+        allow_homebrew=sys.platform == "darwin" and not require_distributable,
     )
     try:
         return validate_model_bundle(models_dir, require_distributable=require_distributable)
@@ -67,7 +68,7 @@ def validate_redistributed_binary_licences(manifest_path, *, require_distributab
         ) from error
     except (OSError, json.JSONDecodeError) as error:
         raise PackagingError(f"Redistributed binary licence manifest is invalid: {error}") from error
-    if not isinstance(manifest, dict) or set(manifest) != {"schema_version", "binaries"}:
+    if not isinstance(manifest, dict) or not {"schema_version", "binaries"} <= set(manifest) or set(manifest) - {"schema_version", "binaries", "libraries"}:
         raise PackagingError("Redistributed binary licence manifest has an unsupported schema")
     entries = manifest["binaries"]
     if manifest["schema_version"] != 1 or not isinstance(entries, list):
@@ -96,6 +97,22 @@ def validate_redistributed_binary_licences(manifest_path, *, require_distributab
             raise PackagingError(f"Redistributed binary {name} has an invalid SHA-256")
         if entry["dependency_policy"] not in _DEPENDENCY_POLICIES:
             raise PackagingError(f"Redistributed binary {name} has an invalid dependency policy")
+    libraries = manifest.get("libraries", [])
+    fields = {"path", "source", "version", "licence", "licence_status", "architecture", "size", "sha256"}
+    if not isinstance(libraries, list) or not all(isinstance(entry, dict) and set(entry) == fields for entry in libraries):
+        raise PackagingError("Redistributed libraries have invalid metadata")
+    names = set()
+    for entry in libraries:
+        name = entry["path"]
+        if not isinstance(name, str) or not name or name.startswith("/") or ".." in Path(name).parts or name in names:
+            raise PackagingError("Redistributed library path is invalid or duplicated")
+        names.add(name)
+        if not all(isinstance(entry[key], str) and entry[key] for key in fields - {"size"}):
+            raise PackagingError(f"Redistributed library {name} has missing metadata")
+        if not isinstance(entry["size"], int) or isinstance(entry["size"], bool) or entry["size"] <= 0 or not _SHA256.fullmatch(entry["sha256"]):
+            raise PackagingError(f"Redistributed library {name} has invalid size or SHA-256")
+        if require_distributable and entry["licence_status"] != "distributable":
+            raise PackagingError(f"Redistributed library {name} is not distributable")
     return Path(manifest_path)
 
 
@@ -183,6 +200,13 @@ def validate_redistributed_binaries(
             dependencies, name, policy=entry["dependency_policy"],
             allow_homebrew=allow_homebrew,
         )
+    library_root = Path(binaries["ffmpeg"]).parent.resolve()
+    for library in manifest.get("libraries", []):
+        path = (library_root / library["path"]).resolve()
+        if not path.is_relative_to(library_root) or not path.is_file():
+            raise PackagingError(f"Redistributed library is absent or escapes bundle: {library['path']}")
+        if path.stat().st_size != library["size"] or _file_sha256(path) != library["sha256"]:
+            raise PackagingError(f"Redistributed library SHA-256 or size mismatch: {library['path']}")
     return [Path(binaries[name]) for name in sorted(_BINARY_NAMES)]
 
 
@@ -212,6 +236,10 @@ def validate_macos_bundle(app_path, *, inspect=None, report_path=None, required_
     for required in required_binaries:
         if not any(path.name == required for path in mach_o_files):
             raise PackagingError(f"Required bundled Mach-O binary was not inspected: {required}")
+    roots = [
+        *executables,
+        *(path for path in mach_o_files if path.name in required_binaries and path not in executables),
+    ]
 
     dependency_graph = {
         path.resolve(): parse_otool_dependencies(inspect(["otool", "-L", path]))
@@ -221,7 +249,7 @@ def validate_macos_bundle(app_path, *, inspect=None, report_path=None, required_
         path.resolve(): parse_otool_rpaths(inspect(["otool", "-l", path]))
         for path in mach_o_files
     }
-    for executable in executables:
+    for executable in roots:
         pending = [(executable.resolve(), ())]
         visited = set()
         while pending:

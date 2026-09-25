@@ -162,6 +162,28 @@ def test_macos_bundle_validator_rejects_missing_loader_target(tmp_path):
         packaging_mod.validate_macos_bundle(app, inspect=inspect)
 
 
+def test_required_bundled_ffmpeg_is_a_dependency_graph_root(tmp_path):
+    app, _, _, inspect, outputs = _fake_macos_app(tmp_path)
+    ffmpeg = app / "Contents" / "Frameworks" / "ffmpeg" / "ffmpeg"
+    ffmpeg.parent.mkdir()
+    ffmpeg.write_bytes(b"media")
+    original_inspect = inspect
+
+    def inspect_with_media(command):
+        if Path(command[-1]) == ffmpeg:
+            if command[0] == "file":
+                return "Mach-O arm64"
+            if command[:2] == ["otool", "-L"]:
+                return f"{ffmpeg}:\n\t/opt/homebrew/lib/libx.dylib (compatibility version 1.0)\n"
+            return ""
+        return original_inspect(command)
+
+    with pytest.raises(PackagingError, match="external dependency"):
+        packaging_mod.validate_macos_bundle(
+            app, inspect=inspect_with_media, required_binaries=("ffmpeg",)
+        )
+
+
 def test_macos_bundle_validator_rejects_transitive_external_dependency(tmp_path):
     app, _, library, inspect, outputs = _fake_macos_app(tmp_path)
     outputs[("otool", "-L", str(library))] = (

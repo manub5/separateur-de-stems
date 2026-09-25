@@ -38,7 +38,7 @@ def test_workflow_triggers_on_tags_and_manual():
 
 
 def test_workflow_uses_macos_arm64_runner():
-    assert "macos-14" in _workflow_text()
+    assert "macos-15" in _workflow_text()
 
 
 def test_workflow_installs_python_and_dependencies():
@@ -188,6 +188,22 @@ def test_workflow_fetches_verified_models_before_pyinstaller_and_tag_gate():
     gate_index = next(i for i, step in enumerate(steps) if step.get("id") == "release_gate")
     assert fetch_index < gate_index < build_index
     assert "--require-hashes" in next(step["run"] for step in steps if "tagged release" in step.get("name", ""))
+
+
+def test_macos_personal_build_prepares_media_then_relocates_before_smoke():
+    steps = _load()["jobs"]["build"]["steps"]
+    prepare = next(i for i, step in enumerate(steps) if "scripts.prepare_media" in step.get("run", ""))
+    source = next(i for i, step in enumerate(steps) if step.get("name") == "Validate bundled media tools")
+    build = next(i for i, step in enumerate(steps) if "-m PyInstaller" in step.get("run", ""))
+    relocate = next(i for i, step in enumerate(steps) if "scripts.relocate_media" in step.get("run", ""))
+    smoke = next(i for i, step in enumerate(steps) if step.get("name") == "Smoke test the bundled binary")
+    assert prepare < source < build < relocate < smoke
+    assert "--allow-homebrew" in steps[source]["run"]
+    assert "--binary-licences dist/StemSeparator.app/Contents/Frameworks/ffmpeg/redistributed-binaries.json" in " ".join(step.get("run", "") for step in steps[relocate:])
+
+
+def test_manual_macos_build_trigger_is_available():
+    assert "workflow_dispatch" in _load()[True]
 
 
 def test_workflow_checks_archive_size_before_artifact_upload():
