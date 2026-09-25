@@ -23,11 +23,6 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Gate tagged release metadata
-        id: release_gate
-        if: startsWith(github.ref, 'refs/tags/')
-        run: python -m scripts.validate_release
-
       # ffmpeg is bundled into the .app by packaging/stem-separator.spec,
       # which resolves it with shutil.which("ffmpeg").
       - name: Install ffmpeg
@@ -53,6 +48,14 @@ jobs:
       - name: Install Python dependencies for development build
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         run: python -m pip install -r requirements/macos-arm64.lock
+
+      - name: Fetch and verify selected models
+        run: python -m scripts.fetch_models
+
+      - name: Gate tagged release metadata
+        id: release_gate
+        if: startsWith(github.ref, 'refs/tags/')
+        run: python -m scripts.validate_release
 
       - name: Run tests (offscreen, fast only)
         env:
@@ -94,6 +97,9 @@ jobs:
         run: |
           du -h dist/StemSeparator-macos.zip
           shasum -a 256 dist/StemSeparator-macos.zip | tee dist/StemSeparator-macos.zip.sha256
+
+      - name: Enforce archive size policy
+        run: python -m scripts.check_artifact_size dist/StemSeparator-macos.zip
 
       - name: Verify archive checksum
         working-directory: dist

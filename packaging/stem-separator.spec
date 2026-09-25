@@ -15,6 +15,7 @@ i18n_dir = ROOT / "separateur_de_stems" / "ui" / "i18n"
 model_assets = validate_build_inputs(
     ROOT / "models", i18n_dir, ffmpeg_src, ffprobe_src,
     ROOT / "packaging" / "redistributed-binaries.json",
+    require_distributable=False,
 )
 
 datas = []

@@ -32,11 +32,22 @@
   frozen fail-closed et validation des vrais ffmpeg/ffprobe avant artefact
   (hash, version, architecture et dépendances macOS).
 
+- Instruction « Modèles » (2026-09-24) : sélection SDR par piste terminée
+  (voix, instrumental, batterie, basse, guitare/piano), téléchargeur vérifié
+  et reprenable (`scripts/fetch_models.py`), désactivation des pistes dont un
+  actif manque dans l'UI, et intégration du build macOS terminée : le workflow
+  télécharge et vérifie les modèles avant PyInstaller
+  (`Fetch and verify selected models`), puis mesure et plafonne la taille de
+  l'archive (`scripts/check_artifact_size.py`, plafond conservateur 2 Gio)
+  avant tout upload. `validate_build_inputs` accepte désormais une licence
+  modèle « À vérifier » pour un build personnel (`require_distributable`
+  paramétrable) ; le gate de release taggée reste strict et exige en plus
+  `validate_model_bundle(..., require_distributable=True)`.
+
 ## À faire
 
-- Modèles : sélection SDR, téléchargement vérifié, disponibilité UI et intégration
-  du build macOS en cours (voir plan du 2026-09-24).
-- Valider le build et les smokes sur macOS arm64 après résolution des blockers.
+- Valider le build et les smokes sur macOS arm64 après résolution des blockers
+  restants (licences des poids, métadonnées ffmpeg/ffprobe, lock transitif).
 
 ## Bloqué
 

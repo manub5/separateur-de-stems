@@ -179,3 +179,19 @@ def test_workflow_verifies_archive_checksum_before_upload():
     upload_index = next(i for i, step in enumerate(steps) if step.get("name") == "Upload the macOS artifact")
     checksum_index = next(i for i, step in enumerate(steps) if "shasum -a 256 -c" in step.get("run", ""))
     assert checksum_index < upload_index
+
+
+def test_workflow_fetches_verified_models_before_pyinstaller_and_tag_gate():
+    steps = _load()["jobs"]["build"]["steps"]
+    fetch_index = next(i for i, step in enumerate(steps) if "scripts.fetch_models" in step.get("run", ""))
+    build_index = next(i for i, step in enumerate(steps) if "PyInstaller" in step.get("run", ""))
+    gate_index = next(i for i, step in enumerate(steps) if step.get("id") == "release_gate")
+    assert fetch_index < gate_index < build_index
+    assert "--require-hashes" in next(step["run"] for step in steps if "tagged release" in step.get("name", ""))
+
+
+def test_workflow_checks_archive_size_before_artifact_upload():
+    steps = _load()["jobs"]["build"]["steps"]
+    upload_index = next(i for i, step in enumerate(steps) if step.get("name") == "Upload the macOS artifact")
+    size_index = next(i for i, step in enumerate(steps) if "scripts.check_artifact_size" in step.get("run", ""))
+    assert size_index < upload_index

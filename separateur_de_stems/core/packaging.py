@@ -39,7 +39,7 @@ _MALFORMED_HASH_REQUIREMENT = re.compile(
 _CRITICAL_MACOS_TRANSITIVES = {"librosa", "numpy", "onnxruntime", "pydub", "torch"}
 
 
-def validate_build_inputs(models_dir, translations_dir, ffmpeg, ffprobe, binary_licences):
+def validate_build_inputs(models_dir, translations_dir, ffmpeg, ffprobe, binary_licences, *, require_distributable=True):
     for name, executable in (("ffmpeg", ffmpeg), ("ffprobe", ffprobe)):
         path = Path(executable) if executable else Path()
         if not executable or not path.is_file() or not os.access(path, os.X_OK):
@@ -52,7 +52,7 @@ def validate_build_inputs(models_dir, translations_dir, ffmpeg, ffprobe, binary_
         {"ffmpeg": Path(ffmpeg), "ffprobe": Path(ffprobe)},
     )
     try:
-        return validate_model_bundle(models_dir, require_distributable=True)
+        return validate_model_bundle(models_dir, require_distributable=require_distributable)
     except BundleManifestError as error:
         raise PackagingError(f"Offline model manifest is incomplete: {error}") from error
 

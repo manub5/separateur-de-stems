@@ -1,11 +1,21 @@
 import hashlib
 import json
+from pathlib import Path
 
 import pytest
 
 from separateur_de_stems.core.bundle_manifest import BundleManifestError, validate_model_bundle
 from separateur_de_stems.core.models import STEM_TO_MODEL
 from separateur_de_stems.core.packaging import PackagingError
+
+
+def test_repository_manifest_maps_every_selected_stem_to_declared_model():
+    manifest = json.loads(Path("models/manifest.json").read_text(encoding="utf-8"))
+    assert {item["filename"] for item in manifest["models"]} == set(STEM_TO_MODEL.values())
+    assets = {asset["path"] for asset in manifest["assets"]}
+    for entry in manifest["models"]:
+        assert entry["filename"] in entry["asset_paths"]
+        assert set(entry["asset_paths"]) <= assets
 
 
 def _entry(filename, payload=b"payload", **overrides):

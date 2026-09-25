@@ -95,11 +95,13 @@ def test_each_language_documents_blocked_publication():
 def test_each_language_documents_all_release_blockers():
     french, english = map(_normalized, _language_sections())
     assert "poids Demucs" in french
-    assert "licences, sources et versions des binaires" in french
+    assert "licences des poids" in french
+    assert "sources et versions des binaires" in french
     assert "macos-arm64-transitive.lock" in french
     assert "MPS/CoreML, `renamex_np` et le `.app` final restent non vérifiés" in french
-    assert "required Demucs weights" in english
-    assert "licences, sources, and versions of redistributed binaries" in english
+    assert "six Demucs" in english
+    assert "Model weight licences" in english
+    assert "sources and versions of redistributed binaries" in english
     assert "macos-arm64-transitive.lock" in english
     assert "MPS/CoreML, `renamex_np`, and the final `.app` remain unverified" in english
 

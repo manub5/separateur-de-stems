@@ -3,6 +3,7 @@
 import argparse
 from pathlib import Path
 
+from separateur_de_stems.core.bundle_manifest import validate_model_bundle
 from separateur_de_stems.core.packaging import (
     validate_macos_release_lock,
     validate_macos_bundle,
@@ -48,6 +49,7 @@ def main() -> int:
     else:
         validate_redistributed_binary_licences(args.binary_licences)
         validate_macos_release_lock(args.macos_lock, Path("requirements/macos-arm64.lock"))
+        validate_model_bundle(Path("models"), require_distributable=True)
     return 0
 
 

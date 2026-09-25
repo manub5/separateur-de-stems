@@ -18,7 +18,7 @@
 - [x] Revue finale — lier le manifeste ffmpeg/ffprobe aux binaires réels (hash, version, architecture et dépendances injectables).
 - [x] Revue finale — placer les gates avant archivage, valider aussi les binaires du bundle et vérifier le checksum de l'archive.
 - [x] Revue finale — aligner les documents sur le seul état versionné, exécuter tous les contrôles puis produire un commit unique.
-- [ ] Sélectionner les meilleurs modèles SDR pour les six pistes et inventorier tous leurs actifs.
-- [ ] Ajouter le téléchargement vérifié et reprenable dans `models/`.
-- [ ] Griser dans l'interface les pistes dont les modèles manquent et tester chaque piste.
-- [ ] Intégrer le téléchargement au workflow macOS personnel et mesurer l'artefact.
+- [x] Sélectionner les meilleurs modèles SDR pour les six pistes et inventorier tous leurs actifs.
+- [x] Ajouter le téléchargement vérifié et reprenable dans `models/`.
+- [x] Griser dans l'interface les pistes dont les modèles manquent et tester chaque piste.
+- [x] Intégrer le téléchargement au workflow macOS personnel et mesurer l'artefact.

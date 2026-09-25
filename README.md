@@ -38,6 +38,11 @@ que l'espace privé de l'exécution.
 - Un répertoire de modèles local est recommandé pour maîtriser les actifs
   utilisés.
 
+Sur un nouveau checkout, `python -m scripts.fetch_models` récupère les modèles
+sélectionnés dans `models/`, reprend les transferts interrompus et vérifie
+tailles et SHA-256. Les cases des pistes sans actifs disponibles sont grisées
+avec l'explication des fichiers manquants.
+
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
@@ -74,16 +79,25 @@ QT_QPA_PLATFORM=offscreen python -m pytest -q
 Le build de développement Linux se lance avec `packaging/build_linux.sh`. Le
 workflow macOS est `.github/workflows/build-macos.yml`.
 
-**PUBLICATION BLOQUÉE.** Le bundle de publication vise un fonctionnement hors ligne.
-Son gate vérifie les actifs déclarés, leurs configurations,
-`download_checks.json`, ffmpeg et ffprobe avant le build. Le manifeste est
-incomplet : le manifeste versionné n'inventorie aucun poids Demucs `.th`, et
-d'autres poids, configurations, tailles, SHA-256, sources ou
-licences manquent. Les licences, sources et versions des binaires restent
-inconnues dans `packaging/redistributed-binaries.json`. Enfin,
+**PUBLICATION BLOQUÉE.** Le bundle de publication vise un fonctionnement hors
+ligne. Les cinq modèles uniques (six pistes) et les six poids
+Demucs `.th` sont inventoriés (2 111 361 857 octets, soit 1,966 Gio).
+Le workflow télécharge et vérifie les actifs avant PyInstaller. Il mesure la
+taille réelle de l'archive macOS et applique un plafond conservateur de 2 Gio ;
+le résultat exact sur macOS arm64 reste inconnu avant la première CI. Les
+licences des poids, ainsi que les sources et versions des binaires ffmpeg/ffprobe,
+restent inconnues dans `packaging/redistributed-binaries.json`. Enfin,
 `requirements/macos-arm64.lock` n'est qu'un inventaire direct épinglé : le vrai
 `requirements/macos-arm64-transitive.lock` avec hashes n'existe pas encore.
 Aucun artefact public de tag n'est donc autorisé.
+
+Une licence de modèle « À vérifier » est admise pour un build **personnel**,
+mais bloque toujours une release publique. Les autres contrôles, notamment
+l'identification vérifiée de ffmpeg/ffprobe et leurs dépendances macOS, restent
+nécessaires même pour ce build. Comme les poids seuls approchent 2 Gio,
+l'archive peut dépasser le plafond choisi : la CI échoue alors avant l'upload
+et indique la taille mesurée. Une autre méthode de livraison ne sera choisie
+qu'après validation de sa limite réelle et des licences.
 
 Le build de développement et le build de publication diffèrent : le premier
 peut utiliser les actifs locaux et les outils du `PATH`; le second doit franchir
@@ -126,6 +140,11 @@ cancellation cleans only that run's private workspace.
 - ffmpeg and ffprobe available for development use.
 - A local model directory is recommended to control the assets being used.
 
+On a fresh checkout, `python -m scripts.fetch_models` downloads the selected
+models into `models/`, resumes interrupted transfers, and verifies sizes and
+SHA-256 hashes. Stems with unavailable assets are disabled with a missing-file
+explanation.
+
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
@@ -162,16 +181,24 @@ QT_QPA_PLATFORM=offscreen python -m pytest -q
 Run the Linux development build with `packaging/build_linux.sh`. The macOS
 workflow is `.github/workflows/build-macos.yml`.
 
-**PUBLIC RELEASE BLOCKED.** The release bundle targets offline operation. Its
-gate verifies declared assets, their configs, `download_checks.json`, ffmpeg,
-and ffprobe before building. The manifest is incomplete: required Demucs
-weights in `.th` files are not inventoried in the versioned manifest, and other
-payloads, configs, sizes, SHA-256 hashes, sources, or licences are missing. The
-licences, sources, and versions of redistributed binaries remain unknown in
+**PUBLIC RELEASE BLOCKED.** The release bundle targets offline operation. The
+five unique models serving six stems, including
+all six Demucs `.th` weights, are inventoried (2,111,361,857 bytes / 1.966 GiB).
+The workflow downloads and validates them before PyInstaller. It measures the
+actual macOS archive and applies a conservative 2 GiB project upload policy;
+the final macOS arm64 archive size remains unverified until CI. Model weight
+licences and the sources and versions of redistributed binaries remain unknown in
 `packaging/redistributed-binaries.json`. Finally,
 `requirements/macos-arm64.lock` is only a pinned direct inventory; a true
 hashed `requirements/macos-arm64-transitive.lock` does not exist yet. No public
 tag artifact is therefore permitted.
+
+An unverified model licence is acceptable for a **personal** build, but still
+blocks a public release. Verified ffmpeg/ffprobe provenance and macOS runtime
+dependencies remain required even for that build. Model weights alone approach
+2 GiB: if the measured archive exceeds the chosen policy, CI fails before
+upload and reports its actual size. A different delivery method needs its own
+size-limit and licence verification.
 
 Development and release builds differ: development may use local assets and
 tools from `PATH`; release must pass every manifest gate and bundle the models,
