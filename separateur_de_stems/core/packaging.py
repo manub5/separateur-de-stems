@@ -50,6 +50,7 @@ def validate_build_inputs(models_dir, translations_dir, ffmpeg, ffprobe, binary_
     validate_redistributed_binaries(
         binary_licences,
         {"ffmpeg": Path(ffmpeg), "ffprobe": Path(ffprobe)},
+        require_distributable=require_distributable,
     )
     try:
         return validate_model_bundle(models_dir, require_distributable=require_distributable)
@@ -57,7 +58,7 @@ def validate_build_inputs(models_dir, translations_dir, ffmpeg, ffprobe, binary_
         raise PackagingError(f"Offline model manifest is incomplete: {error}") from error
 
 
-def validate_redistributed_binary_licences(manifest_path):
+def validate_redistributed_binary_licences(manifest_path, *, require_distributable=True):
     try:
         manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
     except UnicodeDecodeError as error:
@@ -89,7 +90,7 @@ def validate_redistributed_binary_licences(manifest_path):
         name = entry["name"]
         if entry["licence_status"] not in _LICENCE_STATUSES:
             raise PackagingError(f"Redistributed binary {name} has an invalid licence status")
-        if entry.get("licence_status") != "distributable":
+        if require_distributable and entry["licence_status"] != "distributable":
             raise PackagingError(f"Redistributed binary {name} is not distributable")
         if not _SHA256.fullmatch(entry["sha256"]):
             raise PackagingError(f"Redistributed binary {name} has an invalid SHA-256")
@@ -119,11 +120,13 @@ def parse_otool_rpaths(output: str) -> list[str]:
     return rpaths
 
 
-def validate_macos_dependencies(dependencies, binary_name, *, policy="system-only"):
+def validate_macos_dependencies(dependencies, binary_name, *, policy="system-only", allow_homebrew=False):
     if policy == "static" and dependencies:
         raise PackagingError(f"Redistributed binary {binary_name} declares dependencies under static policy")
     allowed = ("/usr/lib/", "/System/Library/", "@rpath/", "@loader_path/", "@executable_path/")
     for dependency in dependencies:
+        if allow_homebrew and dependency.startswith("/opt/homebrew/"):
+            continue
         if not dependency.startswith(allowed):
             raise PackagingError(f"Redistributed binary {binary_name} has external dependency: {dependency}")
 
@@ -134,9 +137,13 @@ def validate_redistributed_binaries(
     *,
     inspect=None,
     platform_name=None,
+    require_distributable=True,
+    allow_homebrew=False,
 ):
     """Bind redistribution metadata to executable bytes and runtime dependencies."""
-    validate_redistributed_binary_licences(manifest_path)
+    validate_redistributed_binary_licences(
+        manifest_path, require_distributable=require_distributable
+    )
     manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
     entries = {entry["name"]: entry for entry in manifest["binaries"]}
     platform_name = platform_name or sys.platform
@@ -172,7 +179,10 @@ def validate_redistributed_binaries(
         if entry["architecture"] not in architecture:
             raise PackagingError(f"Redistributed binary {name} architecture mismatch")
         dependencies = parse_otool_dependencies(inspect(["otool", "-L", path]))
-        validate_macos_dependencies(dependencies, name, policy=entry["dependency_policy"])
+        validate_macos_dependencies(
+            dependencies, name, policy=entry["dependency_policy"],
+            allow_homebrew=allow_homebrew,
+        )
     return [Path(binaries[name]) for name in sorted(_BINARY_NAMES)]
 
 

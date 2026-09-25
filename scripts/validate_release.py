@@ -28,6 +28,7 @@ def main() -> int:
     parser.add_argument("--ffprobe", type=Path)
     parser.add_argument("--platform", choices=("darwin", "linux"))
     parser.add_argument("--binaries-only", action="store_true")
+    parser.add_argument("--allow-homebrew", action="store_true")
     parser.add_argument("--app", type=Path)
     parser.add_argument("--closure-report", type=Path)
     parser.add_argument("--required-binary", action="append", default=[])
@@ -45,6 +46,8 @@ def main() -> int:
             args.binary_licences,
             {"ffmpeg": args.ffmpeg, "ffprobe": args.ffprobe},
             platform_name=args.platform,
+            require_distributable=False,
+            allow_homebrew=args.allow_homebrew,
         )
     else:
         validate_redistributed_binary_licences(args.binary_licences)

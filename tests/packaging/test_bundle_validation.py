@@ -295,6 +295,49 @@ def test_redistributed_binary_licence_status_blocks_distribution(tmp_path):
         packaging_mod.validate_redistributed_binary_licences(manifest)
 
 
+def test_personal_manifest_accepts_gpl_binaries_with_verified_hashes(tmp_path):
+    payloads = {name: name.encode() for name in ("ffmpeg", "ffprobe")}
+    paths = {name: _executable(tmp_path / name, payload.decode()) for name, payload in payloads.items()}
+    manifest = _binary_manifest(tmp_path / "binaries.json", payloads, status="not-distributable")
+
+    def inspect(command):
+        if command[0] == "file":
+            return "Mach-O 64-bit executable arm64"
+        if command[0] == "otool":
+            return f"{command[-1]}:\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0)\n"
+        return f"{Path(command[0]).name} version 7.1 Copyright"
+
+    packaging_mod.validate_redistributed_binaries(
+        manifest, paths, inspect=inspect, platform_name="darwin", require_distributable=False
+    )
+    with pytest.raises(PackagingError, match="not distributable"):
+        packaging_mod.validate_redistributed_binaries(
+            manifest, paths, inspect=inspect, platform_name="darwin", require_distributable=True
+        )
+
+
+def test_source_binary_homebrew_dependency_allowed_only_before_relocation(tmp_path):
+    payloads = {name: name.encode() for name in ("ffmpeg", "ffprobe")}
+    paths = {name: _executable(tmp_path / name, payload.decode()) for name, payload in payloads.items()}
+    manifest = _binary_manifest(tmp_path / "binaries.json", payloads, status="not-distributable")
+
+    def inspect(command):
+        if command[0] == "file":
+            return "Mach-O 64-bit executable arm64"
+        if command[0] == "otool":
+            return f"{command[-1]}:\n\t/opt/homebrew/opt/x264/lib/libx264.dylib (compatibility version 1.0.0)\n"
+        return f"{Path(command[0]).name} version 7.1 Copyright"
+
+    with pytest.raises(PackagingError, match="external dependency"):
+        packaging_mod.validate_redistributed_binaries(
+            manifest, paths, inspect=inspect, platform_name="darwin", require_distributable=False
+        )
+    packaging_mod.validate_redistributed_binaries(
+        manifest, paths, inspect=inspect, platform_name="darwin",
+        require_distributable=False, allow_homebrew=True,
+    )
+
+
 def test_redistributed_binary_manifest_rejects_wrong_top_level_type(tmp_path):
     manifest = tmp_path / "licenses.json"
     manifest.write_text("[]")

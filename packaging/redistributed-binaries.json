@@ -3,23 +3,23 @@
   "binaries": [
     {
       "name": "ffmpeg",
-      "licence": null,
-      "source": null,
-      "version": null,
-      "architecture": null,
+      "licence": "GPL-3.0-or-later",
+      "source": "https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz",
+      "version": "9.0.2",
+      "architecture": "arm64",
       "sha256": null,
-      "dependency_policy": null,
-      "licence_status": "unknown"
+      "dependency_policy": "system-only",
+      "licence_status": "not-distributable"
     },
     {
       "name": "ffprobe",
-      "licence": null,
-      "source": null,
-      "version": null,
-      "architecture": null,
+      "licence": "GPL-3.0-or-later",
+      "source": "https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz",
+      "version": "9.0.2",
+      "architecture": "arm64",
       "sha256": null,
-      "dependency_policy": null,
-      "licence_status": "unknown"
+      "dependency_policy": "system-only",
+      "licence_status": "not-distributable"
     }
   ]
 }
