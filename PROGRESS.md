@@ -34,6 +34,8 @@
 
 ## À faire
 
+- Modèles : sélection SDR, téléchargement vérifié, disponibilité UI et intégration
+  du build macOS en cours (voir plan du 2026-09-24).
 - Valider le build et les smokes sur macOS arm64 après résolution des blockers.
 
 ## Bloqué

@@ -1,49 +1,26 @@
 {
   "schema_version": 2,
   "assets": [
-    {"path": "download_checks.json", "size": null, "sha256": null},
-    {"path": "vocals_mel_band_roformer.ckpt", "size": null, "sha256": null},
-    {"path": "model_bs_roformer_ep_317_sdr_12.9755.ckpt", "size": null, "sha256": null},
-    {"path": "model_bs_roformer_ep_317_sdr_12.9755.yaml", "size": null, "sha256": null},
-    {"path": "htdemucs_ft.yaml", "size": null, "sha256": null},
-    {"path": "hdemucs_mmi.yaml", "size": null, "sha256": null},
-    {"path": "htdemucs_6s.yaml", "size": null, "sha256": null}
+    {"path": "download_checks.json", "size": 28267, "sha256": "d3622e1fa19c161d3cf704927711b453d593a3f1eb0f2e0838c3136907935151", "url": "https://raw.githubusercontent.com/TRvlvr/application_data/main/filelists/download_checks.json"},
+    {"path": "vocals_mel_band_roformer.ckpt", "size": 913106900, "sha256": "87201f4d31afb5bc79993230fc49446918425574db48c01c405e44f365c7559e", "url": "https://github.com/nomadkaraoke/python-audio-separator/releases/download/model-configs/vocals_mel_band_roformer.ckpt"},
+    {"path": "vocals_mel_band_roformer.yaml", "size": 944, "sha256": "b958b29c8f7195f0d86bee6759a33980db675c4ecaf2fcaa80fa125828e6cd38", "url": "https://github.com/nomadkaraoke/python-audio-separator/releases/download/model-configs/vocals_mel_band_roformer.yaml"},
+    {"path": "bs_roformer_vocals_gabox.ckpt", "size": 639254584, "sha256": "18d58efe5e949e70fab11b875329af6d06ef11ccc29574bfe943fb57cc827f38", "url": "https://github.com/nomadkaraoke/python-audio-separator/releases/download/model-configs/bs_roformer_vocals_gabox.ckpt"},
+    {"path": "config_bs_roformer_vocals_gabox.yaml", "size": 2273, "sha256": "2bfdd16c656bd9519aba757cc4f8834b7ede675eb1e00ec4772d74ae1c41af7f", "url": "https://github.com/nomadkaraoke/python-audio-separator/releases/download/model-configs/config_bs_roformer_vocals_gabox.yaml"},
+    {"path": "htdemucs_ft.yaml", "size": 149, "sha256": "69470b8c1bbd674437b51bc9fb491327a10ab0396b702c93389b9cf750016346", "url": "https://github.com/TRvlvr/model_repo/releases/download/all_public_uvr_models/htdemucs_ft.yaml"},
+    {"path": "hdemucs_mmi.yaml", "size": 33, "sha256": "be8b1c6ef2ca406c620917f3d94c15a0d240718604ce89bfa6765bcc52631f05", "url": "https://github.com/TRvlvr/model_repo/releases/download/all_public_uvr_models/hdemucs_mmi.yaml"},
+    {"path": "htdemucs_6s.yaml", "size": 21, "sha256": "207405151270af8fd81c2373c25d27950916682ac91dca7884a11ce13dad6f58", "url": "https://github.com/TRvlvr/model_repo/releases/download/all_public_uvr_models/htdemucs_6s.yaml"},
+    {"path": "f7e0c4bc-ba3fe64a.th", "size": 84141271, "sha256": "ba3fe64ae8ef66ac9a4857222ce48efbdc5eb3ad375cb79dd13debee5aaa4066", "url": "https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/f7e0c4bc-ba3fe64a.th"},
+    {"path": "d12395a8-e57c48e6.th", "size": 84141271, "sha256": "e57c48e6b0e38af4f7118d7bd08c49f0a0c0edf7d09143bdd902ea0d237303e6", "url": "https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/d12395a8-e57c48e6.th"},
+    {"path": "92cfc3b6-ef3bcb9c.th", "size": 84141271, "sha256": "ef3bcb9c8b40d14ae5d51b6db2587339cc12c6b77c0be151ce6d69002e087bf2", "url": "https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/92cfc3b6-ef3bcb9c.th"},
+    {"path": "04573f0d-f3cf25b2.th", "size": 84141271, "sha256": "f3cf25b222c4eed7cd49dd8b2c9597d50c18bd154090f7b919cfa5f93cf22c49", "url": "https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/04573f0d-f3cf25b2.th"},
+    {"path": "75fc33f5-1941ce65.th", "size": 167407275, "sha256": "1941ce654b11df4132b9f4eae408556b4c83fad6fe26b4bc0dbcb36b975befb3", "url": "https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/75fc33f5-1941ce65.th"},
+    {"path": "5c90dfd2-34c22ccb.th", "size": 54996327, "sha256": "34c22ccb381c6f9fdbf324f04e1e2fe21aaaf293f5ded163a162697ff9a02ddd", "url": "https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/5c90dfd2-34c22ccb.th"}
   ],
   "models": [
-    {
-      "filename": "vocals_mel_band_roformer.ckpt",
-      "asset_paths": ["vocals_mel_band_roformer.ckpt"],
-      "source": null,
-      "licence": null,
-      "licence_status": "unknown"
-    },
-    {
-      "filename": "model_bs_roformer_ep_317_sdr_12.9755.ckpt",
-      "asset_paths": ["model_bs_roformer_ep_317_sdr_12.9755.ckpt", "model_bs_roformer_ep_317_sdr_12.9755.yaml"],
-      "source": "https://github.com/TRvlvr/model_repo/releases/download/all_public_uvr_models/model_bs_roformer_ep_317_sdr_12.9755.ckpt",
-      "licence": null,
-      "licence_status": "unknown"
-    },
-    {
-      "filename": "htdemucs_ft.yaml",
-      "asset_paths": ["htdemucs_ft.yaml"],
-      "source": "https://github.com/TRvlvr/model_repo/releases/download/all_public_uvr_models/htdemucs_ft.yaml",
-      "licence": null,
-      "licence_status": "unknown"
-    },
-    {
-      "filename": "hdemucs_mmi.yaml",
-      "asset_paths": ["hdemucs_mmi.yaml"],
-      "source": "https://github.com/TRvlvr/model_repo/releases/download/all_public_uvr_models/hdemucs_mmi.yaml",
-      "licence": null,
-      "licence_status": "unknown"
-    },
-    {
-      "filename": "htdemucs_6s.yaml",
-      "asset_paths": ["htdemucs_6s.yaml"],
-      "source": "https://github.com/TRvlvr/model_repo/releases/download/all_public_uvr_models/htdemucs_6s.yaml",
-      "licence": null,
-      "licence_status": "unknown"
-    }
+    {"filename": "vocals_mel_band_roformer.ckpt", "asset_paths": ["vocals_mel_band_roformer.ckpt", "vocals_mel_band_roformer.yaml"], "source": "https://github.com/nomadkaraoke/python-audio-separator/releases/tag/model-configs", "licence": "À vérifier", "licence_status": "unknown"},
+    {"filename": "bs_roformer_vocals_gabox.ckpt", "asset_paths": ["bs_roformer_vocals_gabox.ckpt", "config_bs_roformer_vocals_gabox.yaml"], "source": "https://github.com/nomadkaraoke/python-audio-separator/releases/tag/model-configs", "licence": "À vérifier", "licence_status": "unknown"},
+    {"filename": "htdemucs_ft.yaml", "asset_paths": ["htdemucs_ft.yaml", "f7e0c4bc-ba3fe64a.th", "d12395a8-e57c48e6.th", "92cfc3b6-ef3bcb9c.th", "04573f0d-f3cf25b2.th"], "source": "https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/", "licence": "À vérifier (poids)", "licence_status": "unknown"},
+    {"filename": "hdemucs_mmi.yaml", "asset_paths": ["hdemucs_mmi.yaml", "75fc33f5-1941ce65.th"], "source": "https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/", "licence": "À vérifier (poids)", "licence_status": "unknown"},
+    {"filename": "htdemucs_6s.yaml", "asset_paths": ["htdemucs_6s.yaml", "5c90dfd2-34c22ccb.th"], "source": "https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/", "licence": "À vérifier (poids)", "licence_status": "unknown"}
   ]
 }

@@ -19,7 +19,7 @@ def is_supported_audio(path: str) -> bool:
 
 STEM_TO_MODEL = {
     "vocals": "vocals_mel_band_roformer.ckpt",
-    "instrumental": "model_bs_roformer_ep_317_sdr_12.9755.ckpt",
+    "instrumental": "bs_roformer_vocals_gabox.ckpt",
     "drums": "htdemucs_ft.yaml",
     "bass": "hdemucs_mmi.yaml",
     "guitar": "htdemucs_6s.yaml",
@@ -45,10 +45,10 @@ _MODEL_SPECS = {
         ("vocals", "instrumental"),
         {"vocals": 12.6, "instrumental": None},
     ),
-    "model_bs_roformer_ep_317_sdr_12.9755.ckpt": ModelSpec(
-        "model_bs_roformer_ep_317_sdr_12.9755.ckpt",
+    "bs_roformer_vocals_gabox.ckpt": ModelSpec(
+        "bs_roformer_vocals_gabox.ckpt",
         ("vocals", "instrumental"),
-        {"vocals": None, "instrumental": 16.5},
+        {"vocals": None, "instrumental": 17.2147},
     ),
     "htdemucs_ft.yaml": ModelSpec(
         "htdemucs_ft.yaml",

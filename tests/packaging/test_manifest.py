@@ -64,9 +64,15 @@ def _write_complete_bundle(root, *, mutate=None):
     return manifest
 
 
-def test_repository_manifest_blocks_on_unknown_asset_metadata():
-    with pytest.raises(BundleManifestError, match=r"download_checks\.json size"):
-        validate_model_bundle("models", require_distributable=True)
+def test_manifest_blocks_public_distribution_with_unknown_licences(tmp_path):
+    _write_complete_bundle(
+        tmp_path,
+        mutate=lambda data: data["models"][0].update(
+            licence="À vérifier", licence_status="unknown"
+        ),
+    )
+    with pytest.raises(BundleManifestError, match="not distributable"):
+        validate_model_bundle(tmp_path, require_distributable=True)
 
 
 def test_model_manifest_invalid_utf8_is_contextual_packaging_error(tmp_path):

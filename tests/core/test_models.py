@@ -17,7 +17,7 @@ from separateur_de_stems.core.models import (
 
 EXPECTED_STEM_TO_MODEL = {
     "vocals": "vocals_mel_band_roformer.ckpt",
-    "instrumental": "model_bs_roformer_ep_317_sdr_12.9755.ckpt",
+    "instrumental": "bs_roformer_vocals_gabox.ckpt",
     "drums": "htdemucs_ft.yaml",
     "bass": "hdemucs_mmi.yaml",
     "guitar": "htdemucs_6s.yaml",
@@ -77,7 +77,7 @@ def test_select_models_uses_canonical_order() -> None:
 
     assert [model.filename for model in result] == [
         "vocals_mel_band_roformer.ckpt",
-        "model_bs_roformer_ep_317_sdr_12.9755.ckpt",
+        "bs_roformer_vocals_gabox.ckpt",
         "htdemucs_ft.yaml",
         "hdemucs_mmi.yaml",
         "htdemucs_6s.yaml",

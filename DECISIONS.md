@@ -170,6 +170,19 @@ ensemble strictement supérieur, ainsi que les transitifs critiques observables
 dans l'application : `torch`, `numpy`, `onnxruntime`, `librosa` et `pydub`.
 Pour un tag, ce lock est l'unique source passée à pip avec `--require-hashes`.
 
+## D-014 — Modèles par piste et taille du bundle
+
+Le classement `audio-separator --list_models --list_format=json` (0.47.0)
+sélectionne Mel-Band RoFormer pour la voix (SDR 12,5967 ; 913 107 844 octets
+poids/config), BS-RoFormer Gabox pour l'instrumental (17,2147 ; 639 256 857 o),
+htdemucs_ft pour la batterie (10,0244 ; 336 565 233 o), hdemucs_mmi pour la
+basse (12,2277 ; 167 407 308 o), et htdemucs_6s pour guitare/piano (SDR non
+fourni ; 54 996 348 o, poids partagé). L'ancien BS-RoFormer instrumental
+(16,4511) est écarté. Les cinq modèles occupent 2 111 361 857 octets avec
+leur index, soit 1,966 Gio non compressés avant Python/torch/Qt/ffmpeg.
+Les licences des poids demeurent inconnues ; aucune redistribution publique
+avant vérification des droits.
+
 ## D-013 — Backend Qt XCB par défaut sous Linux
 
 Sous KDE Wayland avec une carte NVIDIA, l'interface pouvait présenter des zones

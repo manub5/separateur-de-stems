@@ -135,7 +135,7 @@ def test_release_documents_record_demucs_and_task_status_honestly():
     progress = Path("PROGRESS.md").read_text(encoding="utf-8")
     decisions = Path("DECISIONS.md").read_text(encoding="utf-8")
     assert "`.th`" in models
-    assert "Aucun poids `.th` n'est inventorié" in models
+    assert "Les six poids\nDemucs sont inventoriés" in models
     assert "état antérieur, supersédé" in progress
     assert "Task 4" in progress.partition("## Fait")[2].partition("## À faire")[0]
     assert "Task 5" in progress.partition("## Fait")[2].partition("## À faire")[0]

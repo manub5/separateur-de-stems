@@ -39,7 +39,7 @@ def validate_model_bundle(model_dir, *, require_distributable=False):
 
     assets_by_path = {}
     for asset in manifest["assets"]:
-        if not isinstance(asset, dict) or set(asset) != {"path", "size", "sha256"}:
+        if not isinstance(asset, dict) or not {"path", "size", "sha256"} <= set(asset) or set(asset) - {"path", "size", "sha256", "url"}:
             path = asset.get("path", "asset") if isinstance(asset, dict) else "asset"
             raise BundleManifestError(f"Asset {path} must define path, size and sha256")
         path = asset["path"]
@@ -50,6 +50,8 @@ def validate_model_bundle(model_dir, *, require_distributable=False):
             raise BundleManifestError(f"Asset {path} size must be a positive integer")
         if not isinstance(asset["sha256"], str) or not _SHA256.fullmatch(asset["sha256"]):
             raise BundleManifestError(f"Asset {path} sha256 must be 64 lowercase hex characters")
+        if "url" in asset and (not isinstance(asset["url"], str) or not asset["url"].startswith("https://")):
+            raise BundleManifestError(f"Asset {path} url must be HTTPS")
         assets_by_path[path] = asset
     if "download_checks.json" not in assets_by_path:
         raise BundleManifestError("Asset metadata for download_checks.json is required")
