@@ -43,3 +43,7 @@
   inventoriés ; métadonnées ffmpeg/ffprobe inconnues et lock transitif macOS
   arm64 hashé absent. MPS/CoreML, `renamex_np` et le `.app` final attendent une
   validation sur runner macOS arm64.
+
+## Test de connexion
+
+- 2026-09-25 : test d'envoi (push) depuis une session cloud, à titre de vérification.
