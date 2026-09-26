@@ -40,6 +40,7 @@ def main() -> int:
         root / "models", root / "separateur_de_stems" / "ui" / "i18n",
         ffmpeg_dir / "ffmpeg", ffmpeg_dir / "ffprobe",
         ffmpeg_dir / "redistributed-binaries.json",
+        require_distributable=False,
     )
     with tempfile.TemporaryDirectory() as directory:
         smoke_ffmpeg(ffmpeg_dir / "ffmpeg", Path(directory))

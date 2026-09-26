@@ -9,6 +9,7 @@ from pathlib import Path
 import yaml
 
 WORKFLOW = Path(".github/workflows/build-macos.yml")
+SMOKE_BUNDLE = Path("scripts/smoke_bundle.py")
 
 
 def _load() -> dict:
@@ -94,6 +95,10 @@ def test_workflow_smoke_tests_the_app_binary():
     text = _workflow_text()
     assert "StemSeparator.app/Contents/MacOS/StemSeparator" in text
     assert "--help" in text
+
+
+def test_personal_bundle_smoke_does_not_repeat_the_tag_licence_gate():
+    assert "require_distributable=False" in SMOKE_BUNDLE.read_text()
 
 
 def test_workflow_packages_and_uploads_artifact():
