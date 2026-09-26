@@ -2,6 +2,7 @@
 # This is not a transitive lock and intentionally contains no fabricated hashes.
 PySide6==6.11.2
 audio-separator==0.47.0
+onnxruntime==1.30.0
 soundfile==0.14.0
 pytest==9.1.1
 pytest-qt==4.5.0

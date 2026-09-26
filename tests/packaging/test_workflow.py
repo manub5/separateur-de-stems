@@ -56,6 +56,7 @@ def test_workflow_pins_dependency_versions():
     text = Path("requirements/macos-arm64.lock").read_text()
     assert "PySide6==6.11.2" in text
     assert "audio-separator==0.47.0" in text
+    assert "onnxruntime==1.30.0" in text
     assert "pyinstaller==6.22.3" in text.lower()
     assert "soundfile==" in text
     assert "pytest==" in text
@@ -200,6 +201,13 @@ def test_macos_personal_build_prepares_media_then_relocates_before_smoke():
     assert prepare < source < build < relocate < smoke
     assert "--allow-homebrew" in steps[source]["run"]
     assert "--binary-licences dist/StemSeparator.app/Contents/Frameworks/ffmpeg/redistributed-binaries.json" in " ".join(step.get("run", "") for step in steps[relocate:])
+
+
+def test_workflow_tests_repository_templates_before_generating_media_manifest():
+    steps = _load()["jobs"]["build"]["steps"]
+    tests = next(i for i, step in enumerate(steps) if "pytest" in step.get("run", ""))
+    prepare = next(i for i, step in enumerate(steps) if "scripts.prepare_media" in step.get("run", ""))
+    assert tests < prepare
 
 
 def test_manual_macos_build_trigger_is_available():

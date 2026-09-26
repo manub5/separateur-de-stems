@@ -28,17 +28,6 @@ jobs:
       - name: Install ffmpeg
         run: brew install ffmpeg
 
-      - name: Record installed media provenance and SHA-256
-        run: python -m scripts.prepare_media
-
-      - name: Validate bundled media tools
-        run: |
-          test "$(uname -m)" = "arm64"
-          otool -L "$(command -v ffmpeg)"
-          otool -L "$(command -v ffprobe)"
-          python -m scripts.validate_release --binaries-only --platform darwin \
-            --allow-homebrew --ffmpeg "$(command -v ffmpeg)" --ffprobe "$(command -v ffprobe)"
-
       # On macOS arm64 the default torch/onnxruntime wheels are CPU/MPS,
       # so no CUDA extra is installed. Do NOT add a [gpu] extra here:
       # it would pull the multi-gigabyte CUDA stack that only exists on Linux.
@@ -67,6 +56,19 @@ jobs:
 
       - name: Verify translations are up to date
         run: python scripts/build_translations.py --check
+
+      # Run tests against the versioned manifest template before replacing it
+      # with provenance bound to this runner's Homebrew binaries.
+      - name: Record installed media provenance and SHA-256
+        run: python -m scripts.prepare_media
+
+      - name: Validate bundled media tools
+        run: |
+          test "$(uname -m)" = "arm64"
+          otool -L "$(command -v ffmpeg)"
+          otool -L "$(command -v ffprobe)"
+          python -m scripts.validate_release --binaries-only --platform darwin \
+            --allow-homebrew --ffmpeg "$(command -v ffmpeg)" --ffprobe "$(command -v ffprobe)"
 
       - name: Build the .app with PyInstaller
         run: python -m PyInstaller --noconfirm --clean packaging/stem-separator.spec
