@@ -26,6 +26,8 @@
   release publique (tag ni page Releases) tant que les obligations GPL,
   notices/sources et licences des dépendances ne sont pas traitées. Le lock
   transitif macOS hashé reste également à produire sur arm64.
-- Q-007 : valider sur un runner macOS arm64 MPS/CoreML, `renamex_np` et le
-  fonctionnement réel du `.app` final ; ces chemins restent non vérifiés sous
-  Linux.
+- Q-007 : partiellement résolue par le run macOS arm64 `36242245499`. Le `.app`
+  est construit, ses dépendances Mach-O sont fermées, son binaire démarre et
+  ffmpeg encode avec un `PATH` vide. Il reste à tester sur un Mac cible une
+  séparation réelle MPS/CoreML, `renamex_np`, l'interface graphique et le
+  premier lancement de l'application non signée.

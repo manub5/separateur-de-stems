@@ -46,17 +46,23 @@
 - Q-006, préparation implémentée : provenance des exécutables Homebrew relevée
   sur macOS, dylib copiées/relocalisées dans le bundle et inventoriées avec
   taille, SHA-256 et licence réelle. Le parcours Mach-O est testé sous Linux
-  par simulation ; le statut GPL maintient le gate public fermé. L'exécution
-  effective du workflow sur macOS reste à vérifier.
+  par simulation et validé sur le runner macOS ; le statut GPL maintient le
+  gate public fermé.
+- Build personnel macOS arm64 validé par le run GitHub Actions `36242245499` :
+  471 tests, PyInstaller, relocation Homebrew, smoke du `.app` et de ffmpeg avec
+  `PATH` vide, fermeture Mach-O, checksum et upload ont réussi. L'archive
+  `StemSeparator-macos.zip` fait 1 930 531 335 octets (1,798 Gio), sous le
+  plafond de 2 Gio, avec SHA-256
+  `78228f59bd9b05e469ddcb6e7862d39cb6fbe323aed5dc9f9f50ea3dc3c68fcf`.
 
 ## À faire
 
-- Valider le build personnel et les smokes sur le runner macOS arm64. Relever
-  la taille réelle de l'archive et les empreintes binaires générées sur ce Mac.
+- Tester une séparation réelle avec MPS/CoreML et l'ouverture graphique du
+  `.app` non signé sur un Mac Apple Silicon macOS arm64 distinct du runner.
 
 ## Bloqué
 
 - Release publique bloquée intentionnellement : licences des poids à vérifier,
   obligations GPL des binaires/dylib Homebrew non traitées et lock transitif
-  macOS arm64 hashé absent. MPS/CoreML, `renamex_np` et le `.app` final attendent
-  une validation sur runner macOS arm64.
+  macOS arm64 hashé absent. L'inférence MPS/CoreML et l'expérience de premier
+  lancement du `.app` non signé restent à valider sur un Mac cible.

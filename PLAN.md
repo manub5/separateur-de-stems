@@ -26,5 +26,6 @@
   source et SHA-256 réels pour l'artefact personnel.
 - [x] Copier/relocaliser les dylib Homebrew et les inclure dans le manifeste du
   `.app` ; garder la release publique bloquée (Q-006).
-- [ ] Valider les étapes macOS sur runner arm64 sans Homebrew sur la cible, puis
-  confirmer la taille de l'archive et la compatibilité du `.app` (Q-007).
+- [x] Valider le build personnel macOS arm64, ses smokes hors `PATH`, la fermeture
+  Mach-O et l'archive de 1 930 531 335 octets ; l'inférence MPS/CoreML réelle
+  reste à tester sur un Mac cible (Q-007).

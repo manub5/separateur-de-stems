@@ -82,9 +82,9 @@ workflow macOS est `.github/workflows/build-macos.yml`.
 **PUBLICATION BLOQUÉE.** Le bundle de publication vise un fonctionnement hors
 ligne. Les cinq modèles uniques (six pistes) et les six poids
 Demucs `.th` sont inventoriés (2 111 361 857 octets, soit 1,966 Gio).
-Le workflow télécharge et vérifie les actifs avant PyInstaller. Il mesure la
-taille réelle de l'archive macOS et applique un plafond conservateur de 2 Gio ;
-le résultat exact sur macOS arm64 reste inconnu avant la première CI. Les
+Le workflow télécharge et vérifie les actifs avant PyInstaller. Le build
+personnel macOS arm64 validé produit une archive de 1 930 531 335 octets
+(1,798 Gio), sous le plafond conservateur de 2 Gio. Les
 licences des poids restent inconnues. Homebrew annonce ffmpeg GPL-3.0-or-later
 avec x264/x265 sous GPL-2.0-or-later : la conformité d'une diffusion publique
 n'est pas réglée. La CI relève la version et les SHA-256 des exécutables et
@@ -98,10 +98,8 @@ mais bloque toujours une release publique. Les autres contrôles, notamment
 l'identification vérifiée de ffmpeg/ffprobe et la relocation de leurs
 dépendances macOS restent nécessaires même pour ce build. Le déclenchement
 `workflow_dispatch` utilise un runner `macos-15` arm64. Comme les poids seuls
-approchent 2 Gio,
-l'archive peut dépasser le plafond choisi : la CI échoue alors avant l'upload
-et indique la taille mesurée. Une autre méthode de livraison ne sera choisie
-qu'après validation de sa limite réelle et des licences.
+approchent 2 Gio, la marge restante est faible : la CI continue d'échouer avant
+l'upload si une future archive dépasse le plafond choisi.
 
 Le build de développement et le build de publication diffèrent : le premier
 peut utiliser les actifs locaux et les outils du `PATH`; le second doit franchir
@@ -188,9 +186,9 @@ workflow is `.github/workflows/build-macos.yml`.
 **PUBLIC RELEASE BLOCKED.** The release bundle targets offline operation. The
 five unique models serving six stems, including
 all six Demucs `.th` weights, are inventoried (2,111,361,857 bytes / 1.966 GiB).
-The workflow downloads and validates them before PyInstaller. It measures the
-actual macOS archive and applies a conservative 2 GiB project upload policy;
-the final macOS arm64 archive size remains unverified until CI. Model weight
+The workflow downloads and validates them before PyInstaller. The validated
+personal macOS arm64 build produces a 1,930,531,335-byte (1.798 GiB) archive,
+below the conservative 2 GiB project upload policy. Model weight
 licences remain unknown. The Homebrew ffmpeg formula declares
 GPL-3.0-or-later with GPL-licensed x264/x265; public redistribution obligations
 are unresolved. CI records the installed executable and dylib versions and
@@ -203,9 +201,8 @@ An unverified model licence is acceptable for a **personal** build, but still
 blocks a public release. Verified ffmpeg/ffprobe provenance and relocated macOS
 runtime dependencies remain required even for that build. Manual
 `workflow_dispatch` runs on a `macos-15` arm64 runner. Model weights alone approach
-2 GiB: if the measured archive exceeds the chosen policy, CI fails before
-upload and reports its actual size. A different delivery method needs its own
-size-limit and licence verification.
+2 GiB, so little headroom remains. CI still fails before upload if a future
+archive exceeds the chosen policy.
 
 Development and release builds differ: development may use local assets and
 tools from `PATH`; release must pass every manifest gate and bundle the models,
