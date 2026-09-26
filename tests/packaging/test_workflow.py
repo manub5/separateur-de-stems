@@ -57,6 +57,7 @@ def test_workflow_pins_dependency_versions():
     assert "PySide6==6.11.2" in text
     assert "audio-separator==0.47.0" in text
     assert "onnxruntime==1.30.0" in text
+    assert "audioread==3.1.0" in text
     assert "pyinstaller==6.22.3" in text.lower()
     assert "soundfile==" in text
     assert "pytest==" in text
