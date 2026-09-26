@@ -186,6 +186,8 @@ def test_workflow_verifies_archive_checksum_before_upload():
     upload_index = next(i for i, step in enumerate(steps) if step.get("name") == "Upload the macOS artifact")
     checksum_index = next(i for i, step in enumerate(steps) if "shasum -a 256 -c" in step.get("run", ""))
     assert checksum_index < upload_index
+    assert "working-directory" not in steps[checksum_index]
+    assert "dist/StemSeparator-macos.zip.sha256" in steps[checksum_index]["run"]
 
 
 def test_workflow_fetches_verified_models_before_pyinstaller_and_tag_gate():

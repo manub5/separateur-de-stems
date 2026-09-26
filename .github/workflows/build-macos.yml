@@ -111,8 +111,7 @@ jobs:
         run: python -m scripts.check_artifact_size dist/StemSeparator-macos.zip
 
       - name: Verify archive checksum
-        working-directory: dist
-        run: shasum -a 256 -c StemSeparator-macos.zip.sha256
+        run: shasum -a 256 -c dist/StemSeparator-macos.zip.sha256
 
       # GitHub caps individual artifacts (currently ~2 GB zipped). If the zip
       # ever exceeds that limit, fall back to publishing the archive as a
